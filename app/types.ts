@@ -70,4 +70,6 @@ export type GlassNodeData = {
   description?: string;
   created_at?: string;
   animState?: AnimState;
+  hiddenCount?: number;
+  isCollapsed?: boolean;
 };

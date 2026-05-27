@@ -134,6 +134,32 @@ export const GlassNode = memo(({ data }: { data: GlassNodeData }) => {
         </motion.span>
       )}
 
+      {/* Hidden Count Badge for Collapsed Folders */}
+      {data.isCollapsed && data.hiddenCount !== undefined && data.hiddenCount > 0 && (
+        <motion.span
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 120, damping: 14 }}
+          style={{
+            position: 'absolute',
+            bottom: -8,
+            right: -8,
+            fontSize: 9,
+            fontWeight: 600,
+            color: '#fff',
+            background: 'rgba(255,255,255,0.15)',
+            border: '1px solid rgba(255,255,255,0.3)',
+            borderRadius: 10,
+            padding: '2px 6px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+          }}
+        >
+          +{data.hiddenCount} items
+        </motion.span>
+      )}
+
       {/* Handles */}
       <Handle type="target" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
 

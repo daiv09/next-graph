@@ -1,7 +1,7 @@
 // GraphCanvas.tsx
 'use client';
 
-import { useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   type Node,
   type Edge,
@@ -26,6 +26,10 @@ interface GraphCanvasProps {
   onNodeDoubleClick?: (event: React.MouseEvent, node: Node) => void;
 }
 
+// ── Change this value to adjust when the auto-collapsing kicks in ────────
+const AUTO_COLLAPSE_THRESHOLD = 56;
+// ─────────────────────────────────────────────────────────────────────────
+
 export function GraphCanvas({
   nodes: initNodes,
   edges: initEdges,
@@ -36,6 +40,44 @@ export function GraphCanvas({
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
+
+  // 1. Auto-collapse state for smart clustering
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => {
+    if (initNodes.length > AUTO_COLLAPSE_THRESHOLD) return new Set(); 
+    return new Set(initNodes.filter(n => {
+      const type = n.data?.nodeType || n.type;
+      return type === 'folder' || type === 'root' || type === 'dir';
+    }).map(n => n.id));
+  });
+
+  useEffect(() => {
+    if (initNodes.length > AUTO_COLLAPSE_THRESHOLD) {
+      setExpandedFolderIds(new Set());
+    } else {
+      setExpandedFolderIds(new Set(initNodes.filter(n => {
+        const type = n.data?.nodeType || n.type;
+        return type === 'folder' || type === 'root' || type === 'dir';
+      }).map(n => n.id)));
+    }
+  }, [initNodes]);
+
+  // Handle double-clicking a node
+  const handleNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
+    const type = node.data?.nodeType || node.type;
+    // 1. Toggle folder expansion
+    if (type === 'folder' || type === 'root' || type === 'dir') {
+      setExpandedFolderIds(prev => {
+        const next = new Set(prev);
+        if (next.has(node.id)) next.delete(node.id);
+        else next.add(node.id);
+        return next;
+      });
+    }
+    // 2. Call the parent's double click handler (if provided)
+    if (onNodeDoubleClick) {
+      onNodeDoubleClick(event, node);
+    }
+  }, [onNodeDoubleClick]);
 
   // Compute dynamic graph structure and layout for the current commit
   const { nodeStates } = useTimelineAnimation();
@@ -61,14 +103,14 @@ export function GraphCanvas({
     initNodes.forEach(n => {
       const type = n.data?.nodeType || n.type;
       if (type === 'folder' || type === 'root') {
-        const folderPath = n.data?.path as string | undefined;
-        if (!folderPath) {
+        const folderPath = n.data?.path as string || (n.id === 'root' ? '' : '');
+        if (folderPath === '' && n.id !== 'root') {
           visiblePaths.add(n.id);
           return;
         }
         let hasVisibleChild = false;
         for (const vp of visiblePaths) {
-          if (vp.startsWith(folderPath + '/') || vp === folderPath) {
+          if (vp.startsWith(folderPath ? folderPath + '/' : '') || vp === folderPath) {
             hasVisibleChild = true;
             break;
           }
@@ -77,14 +119,51 @@ export function GraphCanvas({
       }
     });
 
-    // Filter nodes
-    const visibleNodesRaw = initNodes.filter(n => {
-      const path = n.data?.path as string | undefined;
+    // 2. Identify which folders are manually collapsed
+    const collapsedFolderPaths = new Set<string>();
+    initNodes.forEach(n => {
       const type = n.data?.nodeType || n.type;
       if (type === 'folder' || type === 'root') {
-         return visiblePaths.has(path || n.id);
+        if (!expandedFolderIds.has(n.id)) {
+          collapsedFolderPaths.add(n.data?.path as string || (n.id === 'root' ? '' : ''));
+        }
       }
-      return path ? visiblePaths.has(path) : false;
+    });
+
+    // Helper to find the top-most collapsed ancestor
+    const getTopCollapsedAncestor = (path: string): string | null => {
+      let topAncestor: string | null = null;
+      for (const cfp of collapsedFolderPaths) {
+        if (cfp === '') { 
+          if (path !== '') return '';
+        } else if (path.startsWith(cfp + '/')) {
+          if (topAncestor === null || cfp.length < topAncestor.length) {
+            topAncestor = cfp;
+          }
+        }
+      }
+      return topAncestor;
+    };
+
+    const hiddenCounts: Record<string, number> = {};
+
+    // 3. Filter nodes based on timeline AND cluster state
+    const visibleNodesRaw = initNodes.filter(n => {
+      const path = n.data?.path as string || (n.id === 'root' ? '' : '');
+      const type = n.data?.nodeType || n.type;
+      const isFolder = type === 'folder' || type === 'root';
+      
+      const timelineVisible = isFolder ? visiblePaths.has(path) : visiblePaths.has(path);
+      if (!timelineVisible) return false;
+
+      // If it's hidden by an ancestor, increment the ancestor's count and hide it
+      const topAncestor = getTopCollapsedAncestor(path);
+      if (topAncestor !== null) {
+        hiddenCounts[topAncestor] = (hiddenCounts[topAncestor] || 0) + 1;
+        return false;
+      }
+      
+      return true;
     });
 
     // Filter edges
@@ -98,25 +177,32 @@ export function GraphCanvas({
     const layoutedNodes = applyDagreLayout(visibleNodesRaw, visibleEdgesRaw);
 
     const finalNodes = layoutedNodes.map(n => {
-       const path = n.data?.path as string | undefined;
+       const path = n.data?.path as string || (n.id === 'root' ? '' : '');
        const type = n.data?.nodeType || n.type;
-       const animState = (type !== 'folder' && type !== 'root' && path) 
+       const isFolder = type === 'folder' || type === 'root';
+       
+       const animState = (!isFolder && path) 
           ? (nodeStates[path] || 'visible') 
           : 'visible';
 
        return {
          ...n,
-         data: { ...n.data, animState },
+         data: { 
+           ...n.data, 
+           animState,
+           hiddenCount: isFolder ? (hiddenCounts[path] || 0) : 0,
+           isCollapsed: isFolder && !expandedFolderIds.has(n.id)
+         },
          style: {
            ...n.style,
-           transition: 'all 0.5s ease-in-out',
+           transition: 'all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)', // Spring-like layout animation
            opacity: 1,
          }
        };
     });
 
     return { timelineNodes: finalNodes, timelineEdges: visibleEdgesRaw };
-  }, [initNodes, initEdges, nodeStates]);
+  }, [initNodes, initEdges, nodeStates, expandedFolderIds]);
 
   useEffect(() => {
     setNodes(timelineNodes);
@@ -146,7 +232,7 @@ export function GraphCanvas({
       onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
       onSelectionChange={onSelectionChange}
-      onNodeDoubleClick={onNodeDoubleClick}
+      onNodeDoubleClick={handleNodeDoubleClick}
       onInit={() => fitView({ padding: 0.18, duration: 500 })}
       fitView
       minZoom={0.25}
