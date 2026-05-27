@@ -73,7 +73,7 @@ export function SearchBar({ status, errorMessage, onSubmit, isFilterOpen, onTogg
             'flex items-center justify-center w-8 h-8 rounded-xl shrink-0 transition-all duration-200 mr-1',
             loading || !url.trim()
               ? 'bg-white/10 text-white/30 cursor-not-allowed'
-              : 'bg-violet-500/70 text-white hover:bg-violet-500/90 active:scale-95',
+              : 'bg-blue-500/70 text-white hover:bg-blue-500/90 active:scale-95',
           ].join(' ')}
         >
           {loading
@@ -88,12 +88,11 @@ export function SearchBar({ status, errorMessage, onSubmit, isFilterOpen, onTogg
           className={[
             'flex items-center gap-1.5 px-3 h-8 rounded-xl shrink-0 transition-all duration-200 text-xs font-semibold select-none border cursor-pointer',
             isFilterOpen
-              ? 'bg-violet-500/20 text-violet-200 border-violet-500/40 shadow-sm'
-              : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white',
+              ? 'bg-blue-500 text-white border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.4)]'
+              : 'bg-blue-500/15 text-blue-200 border-blue-500/20 hover:bg-blue-500/25 hover:text-white',
           ].join(' ')}
           aria-label="Toggle filters"
         >
-          <span>⚙</span>
           <span>Filters</span>
         </button>
       </form>

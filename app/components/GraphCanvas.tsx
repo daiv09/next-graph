@@ -20,6 +20,7 @@ import { applyDagreLayout } from '../utils/graphBuilder';
 import { useAnalyticsContext } from '../context/AnalyticsContext';
 import { ContextMenu } from './ContextMenu';
 import { useAnnotations } from '../hooks/useAnnotations';
+import { useCommandPaletteContext } from '../context/CommandPaletteContext';
 import type { ContextMenuState } from '../types';
 
 interface GraphCanvasProps {
@@ -114,6 +115,7 @@ export function GraphCanvas({
   // Compute dynamic graph structure and layout for the current commit
   const { nodeStates } = useTimelineAnimation();
   const { activeFilter } = useAnalyticsContext();
+  const { activeItemId } = useCommandPaletteContext();
   const { annotations, addAnnotation, updateAnnotation, removeAnnotation } = useAnnotations();
 
   const { timelineNodes, timelineEdges } = useMemo(() => {
@@ -256,8 +258,19 @@ export function GraphCanvas({
           ? (nodeStates[path] || 'visible') 
           : 'visible';
 
-       const isHighlighted = activeFilter ? matchesFilter(n, activeFilter) : false;
-       const isDimmed = activeFilter ? !isHighlighted : false;
+       // Command Palette Highlight Logic
+       let isHighlighted = false;
+       let isDimmed = false;
+
+       if (activeItemId && activeItemId.startsWith('node-')) {
+         const targetId = activeItemId.replace('node-', '');
+         isHighlighted = n.id === targetId;
+         isDimmed = !isHighlighted;
+       } else if (activeFilter) {
+         // Fallback to Analytics Filter
+         isHighlighted = matchesFilter(n, activeFilter);
+         isDimmed = !isHighlighted;
+       }
 
        return {
          ...n,
@@ -291,7 +304,7 @@ export function GraphCanvas({
     }));
 
     return { timelineNodes: [...finalNodes, ...annotationNodes], timelineEdges: visibleEdgesRaw };
-  }, [initNodes, initEdges, nodeStates, expandedFolderIds, activeFilter, annotations, updateAnnotation, removeAnnotation]);
+  }, [initNodes, initEdges, nodeStates, expandedFolderIds, activeFilter, activeItemId, annotations, updateAnnotation, removeAnnotation]);
 
   useEffect(() => {
     setNodes(timelineNodes);

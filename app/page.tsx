@@ -21,6 +21,8 @@ import type { Node, Edge, NodeTypes } from '@xyflow/react';
 import type { GlassNodeData, NodeKind, FetchStatus } from './types';
 
 import { AnnotationNode } from './components/AnnotationNode';
+import { SpotlightSearch } from './components/SpotlightSearch';
+import { CommandPaletteProvider } from './context/CommandPaletteContext';
 
 // ── Node Types ────────────────────────────────────────────────────────────────
 const nodeTypes: NodeTypes = { glass: GlassNode, annotation: AnnotationNode };
@@ -294,6 +296,7 @@ function RepoGraphInner() {
               onSelectedNodeChange={setSelectedNode}
               onNodeDoubleClick={handleNodeDoubleClick}
             />
+            <SpotlightSearch />
           </ReactFlowProvider>
         </motion.div>
 
@@ -389,7 +392,9 @@ export default function Page() {
   return (
     <CommitProvider>
       <AnalyticsProvider>
-        <RepoGraphInner />
+        <CommandPaletteProvider>
+          <RepoGraphInner />
+        </CommandPaletteProvider>
       </AnalyticsProvider>
     </CommitProvider>
   );

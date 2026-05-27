@@ -70,7 +70,7 @@ export function CommitTimeline({ repoUrl }: { repoUrl: string }) {
                 <span>•</span>
                 <span>{formattedDate}</span>
                 <span>•</span>
-                <span className="text-purple-400/80">{selectedIndex + 1}/{commits.length}</span>
+                <span className="text-blue-400/80">{selectedIndex + 1}/{commits.length}</span>
               </div>
             </div>
           </div>

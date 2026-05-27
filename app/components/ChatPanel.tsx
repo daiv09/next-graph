@@ -101,7 +101,7 @@ export function ChatPanel({
         onClick={() => setIsOpen(!isOpen)}
         className={[
           'fixed bottom-6 right-6 z-30 flex items-center justify-center w-14 h-14 rounded-full',
-          'bg-gradient-to-tr from-violet-600/70 to-fuchsia-600/70 text-white font-medium',
+          'bg-blue text-white font-medium',
           'border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl',
           'hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer',
         ].join(' ')}
@@ -141,10 +141,6 @@ export function ChatPanel({
                 <span className="text-[10px] text-white/40 tracking-wider font-mono truncate max-w-[280px]">
                   Context: {repoName}
                 </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[10px] text-white/50 uppercase tracking-widest font-medium">Online</span>
               </div>
             </div>
 

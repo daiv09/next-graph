@@ -68,3 +68,28 @@ body {
 .react-flow__controls-button svg {
   fill: currentColor !important;
 }
+
+.cmdk-group [cmdk-group-heading] {
+  padding: 8px 16px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cmdk-item {
+  padding: 12px 16px;
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+  transition: all 0.15s ease;
+}
+
+.cmdk-item[data-selected="true"] {
+  background: rgba(14, 165, 233, 0.3);
+  color: #fff;
+}
