@@ -27,6 +27,8 @@ import { TourProvider } from './context/TourContext';
 import { TourPanel } from './components/TourPanel';
 import { decodeShareState } from './utils/shareState';
 import { ShareButton } from './components/ShareButton';
+import { ExportMenu } from './components/ExportMenu';
+import { useExportShortcuts } from './hooks/useExportShortcuts';
 
 // ── Node Types ────────────────────────────────────────────────────────────────
 const nodeTypes: NodeTypes = { glass: GlassNode, annotation: AnnotationNode };
@@ -55,6 +57,9 @@ function RepoGraphInner() {
   });
   const abortRef = useRef<AbortController | null>(null);
   const [previewNode, setPreviewNode] = useState<Node | null>(null);
+
+  const displayLabel = meta?.repo ?? PLACEHOLDER.nodes[0]?.label ?? 'Repository';
+  useExportShortcuts(displayLabel);
 
   const { setViewport } = useReactFlow();
 
@@ -190,7 +195,6 @@ function RepoGraphInner() {
 
   const displayNodes = filteredNodes.length;
   const displayEdges = filteredEdges.length;
-  const displayLabel = meta?.repo ?? PLACEHOLDER.nodes[0]?.label ?? 'Repository';
 
   const handleChatSendMessage = useCallback(async (text: string) => {
     const res = await fetch('http://localhost:8000/chat', {
@@ -253,9 +257,10 @@ function RepoGraphInner() {
           </AnimatePresence>
         </div>
 
-        {/* Top Right Action Buttons (Timeline & Analytics & Share) */}
+        {/* Top Right Action Buttons (Export & Share & Timeline & Analytics) */}
         {fetchStatus === 'success' && (
           <div className="absolute top-20 right-4 z-30 flex items-center gap-3">
+            <ExportMenu projectName={displayLabel} />
             <ShareButton repoUrl={currentRepoUrl} filters={filters} />
             <motion.button
               id="toggle-timeline-btn"
