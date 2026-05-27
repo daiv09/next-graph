@@ -197,13 +197,13 @@ export function ChatPanel({
                   exit={{ opacity: 0, y: 15 }}
                   className="px-3 py-1.5 mx-3 mb-2 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between text-xs backdrop-blur-md"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-white/40 uppercase tracking-widest text-[9px] font-bold shrink-0">Focusing:</span>
                     <span className="text-violet-300 font-semibold truncate">
-                      {selectedNode.data?.label || selectedNode.id}
+                      {(selectedNode.data as Record<string, unknown>)?.label as string || selectedNode.id}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/50 border border-white/5 shrink-0 uppercase tracking-wider font-mono">
-                      {selectedNode.data?.nodeType || selectedNode.type || 'node'}
+                      {(selectedNode.data as Record<string, unknown>)?.nodeType as string || selectedNode.type || 'node'}
                     </span>
                   </div>
                   

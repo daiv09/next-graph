@@ -1,24 +1,26 @@
 // constants.ts
+import type { RepoGraphPayload, NodeKind } from '../types';
+
 export const GITHUB_API_BASE = "https://api.github.com";
 
-export const PLACEHOLDER = {
+export const PLACEHOLDER: RepoGraphPayload = {
   nodes: [
-    { id: 'root', label: 'next-graph', type: 'root', description: 'GitHub Repository Root' },
-    { id: 'app',  label: 'app/',       type: 'folder', path: 'app' },
-    { id: 'components', label: 'components/', type: 'folder', path: 'app/components' },
-    { id: 'lib',  label: 'lib/',       type: 'folder', path: 'app' },
-    { id: 'public', label: 'public/', type: 'folder', path: 'public' },
-    { id: 'page', label: 'page.tsx',  type: 'file', path: 'app/page.tsx', language: 'TypeScript', size: 8200 },
-    { id: 'layout', label: 'layout.tsx', type: 'file', path: 'app/layout.tsx', language: 'TypeScript', size: 720 },
-    { id: 'globals', label: 'globals.css', type: 'file', path: 'app/globals.css', language: 'CSS', size: 490 },
-    { id: 'graph', label: 'GraphCanvas.tsx', type: 'file', path: 'app/page.tsx', language: 'TypeScript', size: 3400 },
-    { id: 'search', label: 'SearchBar.tsx', type: 'file', path: 'app/page.tsx', language: 'TypeScript', size: 1200 },
-    { id: 'utils', label: 'utils.ts', type: 'file', path: 'app/layoutUtils.ts', language: 'TypeScript', size: 900 },
-    { id: 'logo', label: 'logo.svg', type: 'file', path: 'public/logo.svg', size: 220 },
-    { id: 'favicon', label: 'favicon.ico', type: 'file', path: 'public/favicon.ico', size: 25900 },
-    { id: 'pkg', label: 'package.json', type: 'dependency', path: 'package.json', size: 535 },
-    { id: 'tsconfig', label: 'tsconfig.json', type: 'file', path: 'tsconfig.json', size: 670 },
-    { id: 'nextcfg', label: 'next.config.ts', type: 'file', path: 'next.config.ts', language: 'TypeScript', size: 135 },
+    { id: 'root', label: 'next-graph', type: 'root' as NodeKind, description: 'GitHub Repository Root' },
+    { id: 'app',  label: 'app/',       type: 'folder' as NodeKind, path: 'app' },
+    { id: 'components', label: 'components/', type: 'folder' as NodeKind, path: 'app/components' },
+    { id: 'lib',  label: 'lib/',       type: 'folder' as NodeKind, path: 'app' },
+    { id: 'public', label: 'public/', type: 'folder' as NodeKind, path: 'public' },
+    { id: 'page', label: 'page.tsx',  type: 'file' as NodeKind, path: 'app/page.tsx', language: 'TypeScript', size: 8200 },
+    { id: 'layout', label: 'layout.tsx', type: 'file' as NodeKind, path: 'app/layout.tsx', language: 'TypeScript', size: 720 },
+    { id: 'globals', label: 'globals.css', type: 'file' as NodeKind, path: 'app/globals.css', language: 'CSS', size: 490 },
+    { id: 'graph', label: 'GraphCanvas.tsx', type: 'file' as NodeKind, path: 'app/components/GraphCanvas.tsx', language: 'TypeScript', size: 3400 },
+    { id: 'search', label: 'SearchBar.tsx', type: 'file' as NodeKind, path: 'app/components/SearchBar.tsx', language: 'TypeScript', size: 1200 },
+    { id: 'utils', label: 'utils.ts', type: 'file' as NodeKind, path: 'app/layoutUtils.ts', language: 'TypeScript', size: 900 },
+    { id: 'logo', label: 'logo.svg', type: 'file' as NodeKind, path: 'public/logo.svg', size: 220 },
+    { id: 'favicon', label: 'favicon.ico', type: 'file' as NodeKind, path: 'public/favicon.ico', size: 25900 },
+    { id: 'pkg', label: 'package.json', type: 'dependency' as NodeKind, path: 'package.json', size: 535 },
+    { id: 'tsconfig', label: 'tsconfig.json', type: 'file' as NodeKind, path: 'tsconfig.json', size: 670 },
+    { id: 'nextcfg', label: 'next.config.ts', type: 'file' as NodeKind, path: 'next.config.ts', language: 'TypeScript', size: 135 },
   ],
   edges: [
     { id: 'e1', source: 'root', target: 'app' },
@@ -38,3 +40,4 @@ export const PLACEHOLDER = {
     { id: 'e15', source: 'public', target: 'favicon' },
   ],
 };
+

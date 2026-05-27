@@ -1,56 +1,176 @@
+// GlassNode.tsx — Supports cinematic timeline animation states
+'use client';
 import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { motion } from 'framer-motion';
-import { type GlassNodeData } from '../types';
+import type { GlassNodeData, AnimState } from '../types';
+
+// ── Visual config per animation state ──────────────────────────────────────
+const STATE_STYLES: Record<
+  AnimState,
+  { border: string; glow: string; badge?: string; badgeColor?: string }
+> = {
+  entering: {
+    border: 'rgba(74,222,128,0.8)',
+    glow: '0 0 18px 4px rgba(74,222,128,0.45), 0 8px 32px rgba(0,0,0,0.5)',
+    badge: '✦ NEW',
+    badgeColor: '#4ade80',
+  },
+  modified: {
+    border: 'rgba(251,191,36,0.8)',
+    glow: '0 0 18px 4px rgba(251,191,36,0.38), 0 8px 32px rgba(0,0,0,0.5)',
+    badge: '✎ MOD',
+    badgeColor: '#fbbf24',
+  },
+  visible: {
+    border: 'rgba(255,255,255,0.20)',
+    glow: '0 8px 32px rgba(0,0,0,0.5)',
+  },
+  hidden: {
+    border: 'rgba(255,255,255,0.05)',
+    glow: 'none',
+  },
+};
+
+// ── Framer Motion variants ──────────────────────────────────────────────────
+const nodeVariants = {
+  entering: {
+    opacity: 1,
+    scale: 1,
+    transition: { type: 'spring' as const, stiffness: 220, damping: 16 },
+  },
+  modified: {
+    opacity: 1,
+    scale: [1, 1.06, 1],
+    transition: { duration: 0.55, ease: 'easeInOut' },
+  },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 0.35 },
+  },
+  hidden: {
+    opacity: 0,
+    scale: 0.75,
+    transition: { duration: 0.4 },
+  },
+  initial_entering: { opacity: 0, scale: 0.5 },
+  initial_modified: { opacity: 0.8, scale: 0.95 },
+  initial_visible: { opacity: 0, scale: 0.9 },
+  initial_hidden: { opacity: 0, scale: 0.75 },
+};
 
 export const GlassNode = memo(({ data }: { data: GlassNodeData }) => {
-  // We check for both 'dir' and 'folder' just in case the backend payload varies
-  const isDirectory = data.nodeType === 'dir' || data.nodeType === 'folder';
+  const isDirectory = data.nodeType === 'dir' || data.nodeType === 'folder' || data.nodeType === 'root';
   const name = data.label;
+  const animState: AnimState = data.animState ?? 'visible';
+  const stateStyle = STATE_STYLES[animState];
 
-  // Your Icon logic
+  // ── File type icon ──────────────────────────────────────────────────────
   const Icon = isDirectory
-    ? (name === '..' ? '📂' : name.startsWith('node_modules') ? '📦' : '📁')
-    : (name.endsWith('.ts') || name.endsWith('.tsx') ? '📘' :
-      name.endsWith('.js') || name.endsWith('.jsx') ? '📙' :
-        name.endsWith('.css') ? '📕' : '📄'); // Added generic document fallback
+    ? (data.nodeType === 'root' ? '🌐' : name.startsWith('node_modules') ? '📦' : '📁')
+    : name.endsWith('.ts') || name.endsWith('.tsx') ? '📘'
+    : name.endsWith('.js') || name.endsWith('.jsx') ? '📙'
+    : name.endsWith('.css') || name.endsWith('.scss') ? '📕'
+    : name.endsWith('.json') ? '🔧'
+    : name.endsWith('.md') ? '📝'
+    : name.endsWith('.py') ? '🐍'
+    : '📄';
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 120, damping: 14 }}
-      className="px-3 py-2 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex items-center gap-2 min-w-[140px]"
+      key={animState} // re-trigger animation when state changes
+      initial={
+        animState === 'entering'
+          ? { opacity: 0, scale: 0.4 }
+          : animState === 'modified'
+          ? { opacity: 0.7, scale: 0.95 }
+          : { opacity: 0, scale: 0.9 }
+      }
+      animate={nodeVariants[animState]}
+      style={{
+        padding: '8px 12px',
+        background:
+          animState === 'entering'
+            ? 'rgba(74,222,128,0.08)'
+            : animState === 'modified'
+            ? 'rgba(251,191,36,0.08)'
+            : 'rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: `1.5px solid ${stateStyle.border}`,
+        borderRadius: 14,
+        boxShadow: stateStyle.glow,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        minWidth: 140,
+        position: 'relative',
+        transition: 'border-color 0.4s ease, box-shadow 0.4s ease, background 0.4s ease',
+        pointerEvents: animState === 'hidden' ? 'none' : 'auto',
+      }}
     >
-      {/* Invisible Target Handle (Incoming) */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="opacity-0 pointer-events-none"
-      />
+      {/* Badge for new / modified */}
+      {stateStyle.badge && (
+        <motion.span
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          style={{
+            position: 'absolute',
+            top: -10,
+            right: 6,
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            color: stateStyle.badgeColor,
+            background: 'rgba(0,0,0,0.7)',
+            border: `1px solid ${stateStyle.badgeColor}`,
+            borderRadius: 4,
+            padding: '1px 5px',
+          }}
+        >
+          {stateStyle.badge}
+        </motion.span>
+      )}
 
-      {/* Render the calculated Icon */}
-      <span className="text-base shrink-0">{Icon}</span>
+      {/* Handles */}
+      <Handle type="target" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
 
-      {/* Node Label and optional Size */}
-      <div className="flex flex-col min-w-0">
-        <h3 className="text-sm font-medium text-white/90 truncate">{name}</h3>
+      {/* Icon */}
+      <span style={{ fontSize: 16, flexShrink: 0 }}>{Icon}</span>
+
+      {/* Text */}
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <h3
+          style={{
+            fontSize: 13,
+            fontWeight: 500,
+            color: animState === 'entering'
+              ? '#bbf7d0'
+              : animState === 'modified'
+              ? '#fef9c3'
+              : 'rgba(255,255,255,0.90)',
+            margin: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 120,
+            transition: 'color 0.4s ease',
+          }}
+        >
+          {name}
+        </h3>
         {data.size !== undefined && !isDirectory && (
-          <span className="text-[9px] text-white/40 font-mono">
+          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>
             {(data.size / 1024).toFixed(1)} KB
           </span>
         )}
       </div>
 
-      {/* Invisible Source Handle (Outgoing) */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="opacity-0 pointer-events-none"
-      />
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
     </motion.div>
   );
 });
 
-// Adding a display name is good practice when using memo
 GlassNode.displayName = 'GlassNode';

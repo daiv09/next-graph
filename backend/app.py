@@ -1,15 +1,26 @@
 # backend/app.py
 """FastAPI entrypoint for uvicorn.
-We simply import the existing FastAPI instance defined in the top‑level ``main.py``
-so that ``uvicorn backend.app:app`` works without moving the whole file.
+We import the FastAPI app defined in main.py and include additional routers.
 """
+
 import sys
 from pathlib import Path
 
-# Add the project root to ``sys.path`` so we can import ``main``
+# Ensure project root is on sys.path
 project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-# Import the FastAPI app that is already defined in ``main.py``
-from main import app  # noqa: F401  (re‑exported as ``backend.app:app``)
+# Import the main FastAPI app (re-exported as `app` for uvicorn)
+from main import app  # noqa: F401
+
+# Include routers
+from routers import router as main_router
+from backend.routers.commits import router as commits_router
+from backend.routers.file_metadata import router as file_metadata_router
+from backend.routers.commit_detail import router as commit_detail_router
+
+app.include_router(main_router)
+app.include_router(commits_router)
+app.include_router(file_metadata_router)
+app.include_router(commit_detail_router)

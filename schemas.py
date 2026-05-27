@@ -54,3 +54,19 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     text: str
+
+class CommitHistoryRequest(BaseModel):
+    url: str
+    branch: str | None = None
+    limit: int = 15
+
+class CommitData(BaseModel):
+    sha: str
+    message: str
+    date: str
+    added: list[str]
+    modified: list[str]
+    deleted: list[str]
+
+class CommitHistoryResponse(BaseModel):
+    commits: list[CommitData]

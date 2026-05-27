@@ -1,6 +1,6 @@
 // types.ts
 export type FetchStatus = 'idle' | 'loading' | 'success' | 'error';
-export type NodeKind = 'root' | 'folder' | 'file' | 'dependency';
+export type NodeKind = 'root' | 'folder' | 'file' | 'dependency' | 'dir';
 
 export interface RepoNode {
   id: string;
@@ -33,6 +33,7 @@ export interface ApiNode {
     owner?: string;
     repo?: string;
     sha?: string;
+    created_at?: string;
   };
   position: { x: number; y: number };
 }
@@ -58,6 +59,8 @@ export interface ApiResponse {
   meta: ApiMeta;
 }
 
+export type AnimState = 'entering' | 'modified' | 'visible' | 'hidden';
+
 export type GlassNodeData = {
   label: string;
   nodeType: NodeKind;
@@ -65,4 +68,6 @@ export type GlassNodeData = {
   language?: string;
   size?: number;
   description?: string;
+  created_at?: string;
+  animState?: AnimState;
 };

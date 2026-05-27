@@ -1,28 +1,31 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
+import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import dagre from 'dagre';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassNode } from './components/GlassNode';
 import { ChatPanel } from './components/ChatPanel';
 import { FilterBar, type FilterState } from './components/FilterBar';
 import FilePreviewPanel from './components/FilePreviewPanel';
-import {SearchBar} from './components/SearchBar';
+import { SearchBar } from './components/SearchBar';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { GraphCanvas } from './components/GraphCanvas';
-import { applyDagreLayout, buildFromPlaceholder, buildFromApi } from './utils/graphBuilder';
+import { CommitTimeline } from './components/CommitTimeline';
+import { CommitProvider, useCommitContext } from './context/CommitContext';
+import { buildFromPlaceholder, buildFromApi } from './utils/graphBuilder';
 import { PLACEHOLDER } from './utils/constants';
 import type { Node, Edge, NodeTypes } from '@xyflow/react';
 import type { GlassNodeData, NodeKind, FetchStatus } from './types';
 
-// Node Types
+// ── Node Types ────────────────────────────────────────────────────────────────
 const nodeTypes: NodeTypes = { glass: GlassNode };
-
 const INITIAL_FLOW = buildFromPlaceholder(PLACEHOLDER);
 
-export default function Page() {
+// ── Inner component (needs CommitContext already mounted) ─────────────────────
+function RepoGraphInner() {
+  const { setRepoUrl } = useCommitContext();
+
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [flowData, setFlowData] = useState<{ nodes: Node[]; edges: Edge[] }>(INITIAL_FLOW);
@@ -30,6 +33,8 @@ export default function Page() {
   const [graphKey, setGraphKey] = useState(0);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [currentRepoUrl, setCurrentRepoUrl] = useState('');
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     showFolders: true,
@@ -56,6 +61,7 @@ export default function Page() {
     setSelectedNode(null);
     setPreviewNode(null);
     setIsFilterOpen(false);
+    setShowTimeline(false);
     setFilters({
       search: '',
       showFolders: true,
@@ -89,26 +95,32 @@ export default function Page() {
       setMeta(data.meta);
       setFetchStatus('success');
       setGraphKey(k => k + 1);
+
+      // Sync repo URL into commit context for timeline
+      setCurrentRepoUrl(url);
+      setRepoUrl(url);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       setFetchStatus('error');
       setErrorMessage(err instanceof Error ? err.message : 'An unexpected error occurred.');
     }
-  }, []);
+  }, [setRepoUrl]);
 
+  // ── Filtering ──────────────────────────────────────────────────────────────
   const filteredNodes = useMemo(() => {
     const directMatches = new Set<string>();
     flowData.nodes.forEach(node => {
-      const label = node.data?.label?.toLowerCase() || '';
+      const d = node.data as GlassNodeData;
+      const label = (d?.label ?? '').toLowerCase();
       const searchMatch = filters.search === '' || label.includes(filters.search.toLowerCase());
-      const type = node.type || node.data?.nodeType;
+      const type = node.type || d?.nodeType;
       let typeMatch = true;
       if (type === 'folder') typeMatch = filters.showFolders;
       if (type === 'file') typeMatch = filters.showFiles;
       if (type === 'dependency') typeMatch = filters.showDependencies;
       let sizeMatch = true;
       if (filters.minSizeKb > 0 && (type === 'file' || type === 'dependency')) {
-        const size = (node.data?.size || 0) / 1024;
+        const size = (d?.size ?? 0) / 1024;
         sizeMatch = size >= filters.minSizeKb;
       }
       if (type === 'root' || (searchMatch && typeMatch && sizeMatch)) {
@@ -117,9 +129,7 @@ export default function Page() {
     });
     const keptIds = new Set<string>(directMatches);
     const parentMap: Record<string, string> = {};
-    flowData.edges.forEach(edge => {
-      parentMap[edge.target] = edge.source;
-    });
+    flowData.edges.forEach(edge => { parentMap[edge.target] = edge.source; });
     directMatches.forEach(matchId => {
       let current = matchId;
       while (parentMap[current]) {
@@ -150,16 +160,12 @@ export default function Page() {
         messages: [{ sender: 'user', text }],
         nodes: flowData.nodes,
         edges: flowData.edges,
-        selected_node: selectedNode ? {
-          id: selectedNode.id,
-          type: selectedNode.type,
-          data: selectedNode.data,
-        } : null,
+        selected_node: selectedNode
+          ? { id: selectedNode.id, type: selectedNode.type, data: selectedNode.data }
+          : null,
       }),
     });
-    if (!res.ok) {
-      throw new Error('Failed to communicate with the chat agent');
-    }
+    if (!res.ok) throw new Error('Failed to communicate with the chat agent');
     const data = await res.json() as { text: string };
     return data.text;
   }, [displayLabel, flowData.nodes, flowData.edges, selectedNode]);
@@ -177,6 +183,7 @@ export default function Page() {
             'radial-gradient(ellipse 50% 50% at 10% 90%, rgba(16,185,129,0.10) 0%, transparent 60%)',
           ].join(', '),
         }} />
+
         {/* Top controls */}
         <div className="absolute top-5 left-1/2 -translate-x-1/2 z-20 w-full max-w-2xl px-4 flex flex-col items-center gap-3 pointer-events-none">
           <div className="w-full pointer-events-auto">
@@ -202,6 +209,39 @@ export default function Page() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Timeline toggle button — only visible after a repo is loaded */}
+        {fetchStatus === 'success' && (
+          <motion.button
+            id="toggle-timeline-btn"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={() => setShowTimeline(v => !v)}
+            style={{
+              position: 'absolute',
+              top: 20,
+              right: 80,
+              zIndex: 30,
+              padding: '8px 16px',
+              borderRadius: 12,
+              border: '1.5px solid rgba(167,139,250,0.5)',
+              background: showTimeline ? 'rgba(109,40,217,0.45)' : 'rgba(255,255,255,0.08)',
+              color: showTimeline ? '#e9d5ff' : 'rgba(255,255,255,0.7)',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              backdropFilter: 'blur(12px)',
+              transition: 'background 0.2s, color 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+            title="Show / hide commit timeline"
+          >
+            🎬 Timeline
+          </motion.button>
+        )}
+
         {/* Canvas */}
         <motion.div
           key={graphKey}
@@ -209,6 +249,7 @@ export default function Page() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', stiffness: 100, damping: 15, delay: 0.15 }}
           className="relative z-10 flex-1 w-full h-full"
+          style={{ paddingBottom: showTimeline ? 90 : 0, transition: 'padding-bottom 0.3s' }}
         >
           <AnimatePresence>
             {fetchStatus === 'loading' && <LoadingOverlay />}
@@ -224,6 +265,31 @@ export default function Page() {
             />
           </ReactFlowProvider>
         </motion.div>
+
+        {/* Commit Timeline — pinned to bottom above footer */}
+        <AnimatePresence>
+          {showTimeline && (
+            <motion.div
+              key="timeline"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 30 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+              style={{
+                position: 'absolute',
+                bottom: 56,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 25,
+                width: 'calc(100% - 48px)',
+                maxWidth: 900,
+              }}
+            >
+              <CommitTimeline repoUrl={currentRepoUrl} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Footer */}
         <motion.footer
           initial={{ opacity: 0, y: 12 }}
@@ -250,6 +316,7 @@ export default function Page() {
             </>
           )}
         </motion.footer>
+
         <ChatPanel
           repoName={displayLabel}
           nodesCount={displayNodes}
@@ -258,19 +325,32 @@ export default function Page() {
           onSendMessage={handleChatSendMessage}
           onViewCode={node => setPreviewNode(node)}
         />
+
         <AnimatePresence>
-          {previewNode && (
-            <FilePreviewPanel
-              repoUrl={meta?.owner ? `https://github.com/${meta.owner}/${meta.repo}` : 'owner/repository'}
-              path={previewNode.data?.path || previewNode.data?.label || previewNode.id}
-              label={previewNode.data?.label || previewNode.id}
-              size={previewNode.data?.size}
-              nodeType={previewNode.data?.nodeType || 'file'}
-              onClose={() => setPreviewNode(null)}
-            />
-          )}
+          {previewNode && (() => {
+            const pd = previewNode.data as GlassNodeData;
+            return (
+              <FilePreviewPanel
+                repoUrl={meta?.owner ? `https://github.com/${meta.owner}/${meta.repo}` : 'owner/repository'}
+                path={pd?.path || pd?.label || previewNode.id}
+                label={pd?.label || previewNode.id}
+                size={pd?.size}
+                nodeType={(pd?.nodeType as NodeKind) || 'file'}
+                onClose={() => setPreviewNode(null)}
+              />
+            );
+          })()}
         </AnimatePresence>
       </main>
     </>
+  );
+}
+
+// ── Root export wraps everything in CommitProvider ────────────────────────────
+export default function Page() {
+  return (
+    <CommitProvider>
+      <RepoGraphInner />
+    </CommitProvider>
   );
 }

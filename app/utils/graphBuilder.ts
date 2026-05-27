@@ -1,7 +1,7 @@
 // graphBuilder.ts
-import type { Node, Edge, NodeTypes } from '@xyflow/react';
+import type { Node, Edge } from '@xyflow/react';
 import dagre from 'dagre';
-import type { GlassNodeData } from '../components/GlassNode';
+import type { GlassNodeData } from '../types';
 import type { RepoNode, RepoEdge, RepoGraphPayload, ApiResponse } from '../types';
 
 // ── Dagre layout ───────────────────────────────────────────────────────────
@@ -66,6 +66,7 @@ export function buildFromApi(api: ApiResponse): { nodes: Node[]; edges: Edge[] }
       path: n.data.path,
       size: n.data.size,
       description: n.data.description,
+      created_at: n.data.created_at,
     } satisfies GlassNodeData,
   }));
   return { nodes: applyDagreLayout(rfNodes, rfEdges), edges: rfEdges };

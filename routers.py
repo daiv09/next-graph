@@ -4,7 +4,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, status
 from schemas import (
     ParseRepoRequest, ParseRepoResponse, FileContentRequest, 
-    ChatRequest, ChatResponse
+    ChatRequest, ChatResponse, CommitHistoryRequest, CommitHistoryResponse
 )
 from services import (
     extract_owner_repo, build_headers, raise_forbidden, 
@@ -137,6 +137,7 @@ async def chat_about_repo(body: ChatRequest) -> ChatResponse:
                 text = f"This is the file **{label}**{size_str} located at `{path}`."
             return ChatResponse(text=text)
 
+
     if any(w in msg for w in ("dependency", "package", "module", "library")):
         dep_list = ", ".join([d.get("data", {}).get("label") or "" for d in deps])
         text = f"Dependency files: **{dep_list}**." if dep_list else "No dependency files detected."
@@ -157,3 +158,62 @@ async def chat_about_repo(body: ChatRequest) -> ChatResponse:
                 "Ask me about 'dependencies', 'folders', 'size', or 'languages'!")
 
     return ChatResponse(text=text)
+
+import asyncio
+
+@router.post("/commit-files", response_model=CommitHistoryResponse, summary="Get commit history with file changes")
+async def get_commit_files(body: CommitHistoryRequest) -> CommitHistoryResponse:
+    owner, repo = extract_owner_repo(body.url)
+    headers = build_headers()
+
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        branch = body.branch or "main"
+        commits_url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/commits?sha={branch}&per_page={body.limit}"
+        commits_resp = await client.get(commits_url, headers=headers)
+
+        if commits_resp.status_code == 403:
+            raise_forbidden(commits_resp)
+        if commits_resp.status_code != 200:
+            raise HTTPException(status_code=commits_resp.status_code, detail="Failed to fetch commits")
+
+        commits_data = commits_resp.json()
+
+        async def fetch_commit_details(sha: str):
+            detail_url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/commits/{sha}"
+            resp = await client.get(detail_url, headers=headers)
+            if resp.status_code != 200:
+                return None
+            return resp.json()
+
+        tasks = [fetch_commit_details(c["sha"]) for c in commits_data]
+        details_results = await asyncio.gather(*tasks)
+
+        results = []
+        for c_meta, detail in zip(commits_data, details_results):
+            if not detail:
+                continue
+
+            added = []
+            modified = []
+            deleted = []
+
+            for f in detail.get("files", []):
+                status = f.get("status")
+                path = f.get("filename")
+                if status == "added":
+                    added.append(path)
+                elif status in ("modified", "renamed", "changed"):
+                    modified.append(path)
+                elif status == "removed":
+                    deleted.append(path)
+
+            results.append({
+                "sha": c_meta["sha"],
+                "message": c_meta["commit"]["message"],
+                "date": c_meta["commit"]["author"]["date"],
+                "added": added,
+                "modified": modified,
+                "deleted": deleted
+            })
+
+        return CommitHistoryResponse(commits=results)
