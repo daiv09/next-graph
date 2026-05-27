@@ -52,6 +52,13 @@ export interface ApiMeta {
   total_nodes: number;
   total_edges: number;
   truncated: boolean;
+  analytics?: {
+    typology: { name: string; value: number }[];
+    scatter: { path: string; size: number; depth: number }[];
+    treemap: { name: string; size: number; fileCount: number }[];
+    sizeDistribution: { name: string; value: number }[];
+    radar: { name: string; avgSize: number; avgDepth: number; fileCount: number }[];
+  };
 }
 export interface ApiResponse {
   nodes: ApiNode[];
@@ -72,4 +79,6 @@ export type GlassNodeData = {
   animState?: AnimState;
   hiddenCount?: number;
   isCollapsed?: boolean;
+  isHighlighted?: boolean;
+  isDimmed?: boolean;
 };

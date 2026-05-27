@@ -13,6 +13,8 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 import { GraphCanvas } from './components/GraphCanvas';
 import { CommitTimeline } from './components/CommitTimeline';
 import { CommitProvider, useCommitContext } from './context/CommitContext';
+import { AnalyticsProvider, useAnalyticsContext } from './context/AnalyticsContext';
+import { AnalyticsPanel } from './components/AnalyticsPanel';
 import { buildFromPlaceholder, buildFromApi } from './utils/graphBuilder';
 import { PLACEHOLDER } from './utils/constants';
 import type { Node, Edge, NodeTypes } from '@xyflow/react';
@@ -25,6 +27,7 @@ const INITIAL_FLOW = buildFromPlaceholder(PLACEHOLDER);
 // ── Inner component (needs CommitContext already mounted) ─────────────────────
 function RepoGraphInner() {
   const { setRepoUrl } = useCommitContext();
+  const { isAnalyticsPanelOpen, setIsAnalyticsPanelOpen } = useAnalyticsContext();
 
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
@@ -174,15 +177,17 @@ function RepoGraphInner() {
     <>
       <title>next-graph — GitHub Structure Visualizer</title>
       <meta name="description" content="Visualize any GitHub repository as a beautiful hierarchical node graph." />
-      <main className="relative flex flex-col w-full h-screen overflow-hidden bg-[#080810]">
-        {/* Ambient gradient */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0" style={{
-          background: [
-            'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(109,40,217,0.28) 0%, transparent 70%)',
-            'radial-gradient(ellipse 60% 40% at 80% 110%, rgba(14,165,233,0.18) 0%, transparent 60%)',
-            'radial-gradient(ellipse 50% 50% at 10% 90%, rgba(16,185,129,0.10) 0%, transparent 60%)',
-          ].join(', '),
-        }} />
+      <main className="relative flex flex-col w-full h-screen overflow-hidden bg-[#121212]">
+
+        {/* Subtle Dot Pattern Overlay */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-0 pointer-events-none"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+          }}
+        />
 
         {/* Top controls */}
         <div className="absolute top-5 left-1/2 -translate-x-1/2 z-20 w-full max-w-2xl px-4 flex flex-col items-center gap-3 pointer-events-none">
@@ -210,36 +215,60 @@ function RepoGraphInner() {
           </AnimatePresence>
         </div>
 
-        {/* Timeline toggle button — only visible after a repo is loaded */}
+        {/* Top Right Action Buttons (Timeline & Analytics) */}
         {fetchStatus === 'success' && (
-          <motion.button
-            id="toggle-timeline-btn"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            onClick={() => setShowTimeline(v => !v)}
-            style={{
-              position: 'absolute',
-              top: 20,
-              right: 80,
-              zIndex: 30,
-              padding: '8px 16px',
-              borderRadius: 12,
-              border: '1.5px solid rgba(167,139,250,0.5)',
-              background: showTimeline ? 'rgba(109,40,217,0.45)' : 'rgba(255,255,255,0.08)',
-              color: showTimeline ? '#e9d5ff' : 'rgba(255,255,255,0.7)',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              backdropFilter: 'blur(12px)',
-              transition: 'background 0.2s, color 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-            title="Show / hide commit timeline"
-          >
-            🎬 Timeline
-          </motion.button>
+          <div className="absolute top-20 right-4 z-30 flex items-center gap-3">
+            <motion.button
+              id="toggle-timeline-btn"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={() => setShowTimeline(v => !v)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 12,
+                border: '1.5px solid rgba(167,139,250,0.5)',
+                background: showTimeline ? 'rgba(109,40,217,0.45)' : 'rgba(255,255,255,0.08)',
+                color: showTimeline ? '#e9d5ff' : 'rgba(255,255,255,0.7)',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                backdropFilter: 'blur(12px)',
+                transition: 'background 0.2s, color 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+              title="Show / hide commit timeline"
+            >
+              🎬 Timeline
+            </motion.button>
+
+            {meta?.analytics && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                onClick={() => setIsAnalyticsPanelOpen(!isAnalyticsPanelOpen)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 12,
+                  border: '1.5px solid rgba(14,165,233,0.5)',
+                  background: isAnalyticsPanelOpen ? 'rgba(14,165,233,0.45)' : 'rgba(255,255,255,0.08)',
+                  color: isAnalyticsPanelOpen ? '#bae6fd' : 'rgba(255,255,255,0.7)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(12px)',
+                  transition: 'background 0.2s, color 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                title="Show / hide analytics"
+              >
+                📊 Analytics
+              </motion.button>
+            )}
+          </div>
         )}
 
         {/* Canvas */}
@@ -287,6 +316,13 @@ function RepoGraphInner() {
             >
               <CommitTimeline repoUrl={currentRepoUrl} />
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Analytics Panel */}
+        <AnimatePresence>
+          {isAnalyticsPanelOpen && meta?.analytics && (
+            <AnalyticsPanel analytics={meta.analytics} onClose={() => setIsAnalyticsPanelOpen(false)} />
           )}
         </AnimatePresence>
 
@@ -350,7 +386,9 @@ function RepoGraphInner() {
 export default function Page() {
   return (
     <CommitProvider>
-      <RepoGraphInner />
+      <AnalyticsProvider>
+        <RepoGraphInner />
+      </AnalyticsProvider>
     </CommitProvider>
   );
 }

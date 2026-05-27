@@ -17,6 +17,7 @@ import {
 import { useCommitContext } from '../context/CommitContext';
 import { useTimelineAnimation } from '../hooks/useTimelineAnimation';
 import { applyDagreLayout } from '../utils/graphBuilder';
+import { useAnalyticsContext } from '../context/AnalyticsContext';
 
 interface GraphCanvasProps {
   nodes: Node[];
@@ -81,6 +82,7 @@ export function GraphCanvas({
 
   // Compute dynamic graph structure and layout for the current commit
   const { nodeStates } = useTimelineAnimation();
+  const { activeFilter } = useAnalyticsContext();
 
   const { timelineNodes, timelineEdges } = useMemo(() => {
     if (!initNodes || initNodes.length === 0) return { timelineNodes: [], timelineEdges: [] };
@@ -176,14 +178,54 @@ export function GraphCanvas({
     // Apply Dagre layout to dynamically reposition nodes
     const layoutedNodes = applyDagreLayout(visibleNodesRaw, visibleEdgesRaw);
 
+    // Helper to evaluate if a node matches the active filter
+    const matchesFilter = (n: Node, filter: any): boolean => {
+       const path = n.data?.path as string || (n.id === 'root' ? '' : '');
+       const size = (n.data?.size as number) || 0;
+       
+       if (filter.type === 'typology') {
+         const filename = path.split('/').pop()?.toLowerCase() || '';
+         let typology = 'Implementation';
+         if (path.toLowerCase().includes('test') || filename.includes('spec') || filename.includes('mock')) typology = 'Tests';
+         else if (filename.endsWith('.md') || filename.endsWith('.txt') || filename.endsWith('.rst')) typology = 'Documentation';
+         else if (filename.endsWith('.json') || filename.endsWith('.yml') || filename.endsWith('.yaml') || filename.endsWith('.toml') || filename.endsWith('.ini') || filename.endsWith('.env') || filename.includes('config')) typology = 'Configuration';
+         else if (filename.includes('docker') || filename.includes('makefile') || path.includes('.github')) typology = 'Infrastructure';
+         
+         return typology === filter.value;
+       }
+       if (filter.type === 'sizeBucket') {
+         let bucket = '100KB+';
+         if (size < 1024) bucket = '<1KB';
+         else if (size < 10240) bucket = '1-10KB';
+         else if (size < 51200) bucket = '10-50KB';
+         else if (size < 102400) bucket = '50-100KB';
+         return bucket === filter.value;
+       }
+       if (filter.type === 'scatter') {
+         return path === filter.value;
+       }
+       if (filter.type === 'treemap') {
+         const parent = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '/';
+         return parent === filter.value;
+       }
+       if (filter.type === 'radar') {
+         const rootFolder = path.split('/')[0];
+         return rootFolder === filter.value;
+       }
+       return false;
+    };
+
     const finalNodes = layoutedNodes.map(n => {
        const path = n.data?.path as string || (n.id === 'root' ? '' : '');
        const type = n.data?.nodeType || n.type;
-       const isFolder = type === 'folder' || type === 'root';
+       const isFolder = type === 'folder' || type === 'root' || type === 'dir';
        
        const animState = (!isFolder && path) 
           ? (nodeStates[path] || 'visible') 
           : 'visible';
+
+       const isHighlighted = activeFilter ? matchesFilter(n, activeFilter) : false;
+       const isDimmed = activeFilter ? !isHighlighted : false;
 
        return {
          ...n,
@@ -191,7 +233,9 @@ export function GraphCanvas({
            ...n.data, 
            animState,
            hiddenCount: isFolder ? (hiddenCounts[path] || 0) : 0,
-           isCollapsed: isFolder && !expandedFolderIds.has(n.id)
+           isCollapsed: isFolder && !expandedFolderIds.has(n.id),
+           isHighlighted,
+           isDimmed
          },
          style: {
            ...n.style,

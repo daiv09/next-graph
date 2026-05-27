@@ -138,3 +138,84 @@ def calculate_metrics(content: str, filename: str) -> dict[str, Any]:
         rating, rec = "Critical", "Critical complexity! Refactoring is highly recommended to improve readability."
 
     return {"loc": loc, "functions": func_count, "classes": class_count, "complexity": complexity_score, "rating": rating, "recommendation": rec}
+
+def calculate_analytics(tree_items: list[dict[str, Any]]) -> dict[str, Any]:
+    typology = {
+        "Implementation": 0, "Tests": 0, "Configuration": 0,
+        "Documentation": 0, "Infrastructure": 0
+    }
+    scatter_data = []
+    folder_stats: dict[str, dict[str, Any]] = {}
+    size_distribution = {
+        "<1KB": 0, "1-10KB": 0, "10-50KB": 0, "50-100KB": 0, "100KB+": 0
+    }
+    root_folders: dict[str, dict[str, int]] = {}
+    
+    for item in tree_items:
+        if item.get("type") == "tree": continue
+            
+        path = item.get("path", "")
+        size = item.get("size") or 0
+        depth = len(path.split("/")) - 1
+        
+        # 1. Typology
+        filename = path.split("/")[-1].lower()
+        if "test" in path.lower() or "spec" in filename or "mock" in filename:
+            typology["Tests"] += 1
+        elif filename.endswith((".md", ".txt", ".rst")):
+            typology["Documentation"] += 1
+        elif filename.endswith((".json", ".yml", ".yaml", ".toml", ".ini", ".env")) or "config" in filename:
+            typology["Configuration"] += 1
+        elif "docker" in filename or "makefile" in filename or ".github" in path:
+            typology["Infrastructure"] += 1
+        else:
+            typology["Implementation"] += 1
+            
+        # 2. Scatter
+        scatter_data.append({"path": path, "size": size, "depth": depth})
+        
+        # 3. Treemap
+        parent = path.rsplit("/", 1)[0] if "/" in path else "/"
+        if parent not in folder_stats:
+            folder_stats[parent] = {"name": parent, "size": 0, "fileCount": 0}
+        folder_stats[parent]["size"] += size
+        folder_stats[parent]["fileCount"] += 1
+        
+        # 4. Size Dist
+        if size < 1024: size_distribution["<1KB"] += 1
+        elif size < 10240: size_distribution["1-10KB"] += 1
+        elif size < 51200: size_distribution["10-50KB"] += 1
+        elif size < 102400: size_distribution["50-100KB"] += 1
+        else: size_distribution["100KB+"] += 1
+            
+        # 5. Radar
+        if "/" in path:
+            root_folder = path.split("/")[0]
+            if root_folder not in root_folders:
+                root_folders[root_folder] = {"size_sum": 0, "depth_sum": 0, "fileCount": 0}
+            root_folders[root_folder]["size_sum"] += size
+            root_folders[root_folder]["depth_sum"] += depth
+            root_folders[root_folder]["fileCount"] += 1
+
+    typology_list = [{"name": k, "value": v} for k, v in typology.items() if v > 0]
+    treemap_list = list(folder_stats.values())
+    distribution_list = [{"name": k, "value": v} for k, v in size_distribution.items()]
+    
+    top_roots = sorted(root_folders.items(), key=lambda x: x[1]["fileCount"], reverse=True)[:5]
+    radar_list = []
+    for name, stats in top_roots:
+        c = stats["fileCount"]
+        radar_list.append({
+            "name": name,
+            "avgSize": round(stats["size_sum"] / c),
+            "avgDepth": round(stats["depth_sum"] / c, 2),
+            "fileCount": c
+        })
+        
+    return {
+        "typology": typology_list,
+        "scatter": scatter_data,
+        "treemap": treemap_list,
+        "sizeDistribution": distribution_list,
+        "radar": radar_list
+    }

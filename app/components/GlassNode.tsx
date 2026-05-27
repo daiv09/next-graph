@@ -79,15 +79,19 @@ export const GlassNode = memo(({ data }: { data: GlassNodeData }) => {
 
   return (
     <motion.div
-      key={animState} // re-trigger animation when state changes
+      key={`${animState}-${data.isHighlighted ? 'highlight' : ''}-${data.isDimmed ? 'dim' : ''}`}
       initial={
         animState === 'entering'
           ? { opacity: 0, scale: 0.4 }
           : animState === 'modified'
           ? { opacity: 0.7, scale: 0.95 }
-          : { opacity: 0, scale: 0.9 }
+          : { opacity: data.isDimmed ? 0.2 : 0, scale: 0.9 }
       }
-      animate={nodeVariants[animState]}
+      animate={{
+        ...nodeVariants[animState],
+        opacity: data.isDimmed ? 0.2 : nodeVariants[animState].opacity,
+        scale: data.isHighlighted ? 1.05 : nodeVariants[animState].scale,
+      }}
       style={{
         padding: '8px 12px',
         background:
@@ -98,9 +102,13 @@ export const GlassNode = memo(({ data }: { data: GlassNodeData }) => {
             : 'rgba(255,255,255,0.08)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        border: `1.5px solid ${stateStyle.border}`,
+        border: data.isHighlighted 
+          ? '2px solid rgba(14,165,233,1)' 
+          : `1.5px solid ${data.isDimmed ? 'rgba(255,255,255,0.02)' : stateStyle.border}`,
         borderRadius: 14,
-        boxShadow: stateStyle.glow,
+        boxShadow: data.isHighlighted 
+          ? '0 0 20px 5px rgba(14,165,233,0.6), 0 8px 32px rgba(0,0,0,0.5)'
+          : (data.isDimmed ? 'none' : stateStyle.glow),
         display: 'flex',
         alignItems: 'center',
         gap: 8,

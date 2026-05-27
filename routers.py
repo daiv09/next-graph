@@ -8,7 +8,7 @@ from schemas import (
 )
 from services import (
     extract_owner_repo, build_headers, raise_forbidden, 
-    raise_rate_limit, build_graph, calculate_metrics
+    raise_rate_limit, build_graph, calculate_metrics, calculate_analytics
 )
 from constants import GITHUB_API_BASE
 
@@ -50,7 +50,9 @@ async def parse_repo(body: ParseRepoRequest) -> ParseRepoResponse:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository appears to be empty.")
 
         tree_data = tree_resp.json()
-        nodes, edges = build_graph(tree_data.get("tree", []), owner, repo)
+        tree_items = tree_data.get("tree", [])
+        nodes, edges = build_graph(tree_items, owner, repo)
+        analytics = calculate_analytics(tree_items)
 
         return ParseRepoResponse(
             nodes=nodes, edges=edges,
@@ -61,6 +63,7 @@ async def parse_repo(body: ParseRepoRequest) -> ParseRepoResponse:
                 "language": repo_data.get("language") or "",
                 "total_nodes": len(nodes), "total_edges": len(edges),
                 "truncated": tree_data.get("truncated", False),
+                "analytics": analytics,
             },
         )
 
