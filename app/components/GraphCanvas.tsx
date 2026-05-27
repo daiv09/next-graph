@@ -13,6 +13,7 @@ import {
   useReactFlow,
   useNodesState,
   useEdgesState,
+  MiniMap,
 } from '@xyflow/react';
 import { useCommitContext } from '../context/CommitContext';
 import { useTimelineAnimation } from '../hooks/useTimelineAnimation';
@@ -348,6 +349,22 @@ export function GraphCanvas({
     }
   }, [isTourActive, currentStepIndex, tourSteps, nodes, fitView]);
 
+  const getNodeColor = useCallback((node: Node) => {
+    const type = node.data?.nodeType || node.type;
+    switch (type) {
+      case 'root':
+      case 'folder':
+      case 'dir':
+        return 'rgba(139, 92, 246, 0.9)'; // Glowing violet
+      case 'dependency':
+        return 'rgba(245, 158, 11, 0.9)'; // Amber
+      case 'annotation':
+        return 'rgba(234, 179, 8, 0.9)'; // Yellow
+      default:
+        return 'rgba(255, 255, 255, 0.3)'; // Translucent white for files
+    }
+  }, []);
+
   return (
     <>
       <ReactFlow
@@ -375,6 +392,19 @@ export function GraphCanvas({
         <Controls
           className="!bg-white/10 !backdrop-blur-xl !border !border-white/20 !rounded-xl !shadow-lg"
           showInteractive={false}
+        />
+        <MiniMap 
+          nodeColor={getNodeColor}
+          nodeStrokeWidth={3}
+          zoomable
+          pannable
+          onNodeClick={(e, node) => {
+            fitView({ nodes: [node], duration: 800, padding: 0.5, maxZoom: 1.5 });
+          }}
+          className="!bg-[#0a0a0f]/50 !backdrop-blur-xl !border !border-white/10 !rounded-2xl !shadow-[0_8px_32px_rgba(0,0,0,0.6)] !overflow-hidden !bottom-[80px]"
+          maskColor="rgba(255, 255, 255, 0.05)"
+          maskStrokeColor="rgba(255, 255, 255, 0.15)"
+          maskStrokeWidth={1}
         />
       </ReactFlow>
 
