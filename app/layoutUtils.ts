@@ -23,10 +23,37 @@ export function getLayoutedElements(
 
   dagre.layout(g);
 
+  const childrenMap: Record<string, string[]> = {};
+  edges.forEach((edge) => {
+    if (!childrenMap[edge.source]) {
+      childrenMap[edge.source] = [];
+    }
+    childrenMap[edge.source].push(edge.target);
+  });
+
+  const depthMap: Record<string, number> = {};
+  function dfs(nodeId: string, currentDepth: number) {
+    depthMap[nodeId] = currentDepth;
+    const children = childrenMap[nodeId] || [];
+    children.forEach((childId) => {
+      dfs(childId, currentDepth + 1);
+    });
+  }
+
+  const incoming = new Set(edges.map((e) => e.target));
+  const rootNode = nodes.find((n) => !incoming.has(n.id)) || nodes[0];
+  if (rootNode) {
+    dfs(rootNode.id, 0);
+  }
+
   return nodes.map((node) => {
     const nodeWithPosition = g.node(node.id);
     return {
       ...node,
+      data: {
+        ...node.data,
+        depth: depthMap[node.id] ?? 0,
+      },
       position: {
         x: nodeWithPosition.x - NODE_WIDTH / 2,
         y: nodeWithPosition.y - NODE_HEIGHT / 2,

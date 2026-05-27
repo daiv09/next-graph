@@ -12,6 +12,7 @@ export type GlassNodeData = {
   language?: string;
   size?: number;
   description?: string;
+  depth?: number;
 };
 
 export type GlassNodeType = Node<GlassNodeData, 'glass'>;
@@ -38,16 +39,17 @@ const getAccent = (kind: NodeKind): string => {
 };
 
 const GlassNodeComponent = ({ data, selected }: NodeProps<GlassNodeType>) => {
-  const { label, nodeType, language, size, description } = data;
+  const { label, nodeType, language, size, description, depth = 0 } = data;
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0 }}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={{ opacity: 0, scale: 0.8, filter: 'blur(8px)' }}
+      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
       transition={{
         type: 'spring',
         stiffness: 120,
         damping: 14,
+        delay: depth * 0.08,
       }}
       className={[
         'relative flex flex-col justify-center gap-1 px-4 py-3 rounded-2xl cursor-default select-none',

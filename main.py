@@ -425,6 +425,122 @@ def _raise_rate_limit(resp: httpx.Response) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Chat Schemas and Endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ChatMessageModel(BaseModel):
+    sender: Literal["user", "agent"]
+    text: str
+
+
+class ChatRequest(BaseModel):
+    repo_name: str
+    messages: list[ChatMessageModel]
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
+    selected_node: dict[str, Any] | None = None
+
+
+class ChatResponse(BaseModel):
+    text: str
+
+
+@app.post(
+    "/chat",
+    response_model=ChatResponse,
+    summary="Ask questions about the repository structure",
+)
+async def chat_about_repo(body: ChatRequest) -> ChatResponse:
+    last_user_message = next(
+        (m.text for m in reversed(body.messages) if m.sender == "user"), ""
+    )
+    if not last_user_message:
+        return ChatResponse(text="Hello! How can I help you explore this repository today?")
+
+    msg = last_user_message.lower()
+
+    # Extract info from nodes
+    files = [
+        n
+        for n in body.nodes
+        if n.get("type") in ("file", "dependency")
+        or n.get("data", {}).get("nodeType") in ("file", "dependency")
+    ]
+    folders = [
+        n
+        for n in body.nodes
+        if n.get("type") == "folder" or n.get("data", {}).get("nodeType") == "folder"
+    ]
+    deps = [
+        n
+        for n in body.nodes
+        if n.get("type") == "dependency" or n.get("data", {}).get("nodeType") == "dependency"
+    ]
+
+    total_size = sum(n.get("data", {}).get("size") or 0 for n in files)
+    languages: dict[str, int] = {}
+    for n in files:
+        label = n.get("data", {}).get("label") or ""
+        ext = label.split(".")[-1] if "." in label else "unknown"
+        languages[ext] = languages.get(ext, 0) + 1
+
+    # Active Node Context handler
+    selected = body.selected_node
+    if selected:
+        label = selected.get("data", {}).get("label") or selected.get("id") or "unknown"
+        node_type = selected.get("data", {}).get("nodeType") or selected.get("type") or "file"
+        path = selected.get("data", {}).get("path") or label
+        size = selected.get("data", {}).get("size")
+        size_str = f" ({size:,} bytes)" if size is not None else ""
+
+        # Answer specifically regarding the selected node
+        if any(w in msg for w in ("what", "explain", "role", "tell me", "details", "info", "this")):
+            if node_type == "root":
+                text = f"You are focusing on the repository root: **{label}**. This represents the top-level directory."
+            elif node_type == "folder":
+                text = f"You are focusing on the folder **{label}** (path: `{path}`). It contains files or subfolders grouped under it."
+            elif node_type == "dependency":
+                text = f"This is **{label}** (path: `{path}`), which is a **dependency config file** specifying third-party packages or system dependencies."
+            else:
+                text = f"This is the file **{label}**{size_str} located at `{path}`. It contains source code or assets for the repository."
+            return ChatResponse(text=text)
+
+    if "dependency" in msg or "package" in msg or "module" in msg or "library" in msg:
+        dep_list = ", ".join([d.get("data", {}).get("label") or "" for d in deps])
+        if dep_list:
+            text = f"This repository contains the following dependency configuration files: **{dep_list}**."
+        else:
+            text = "No standard package or dependency manifest files (like `package.json` or `requirements.txt`) were detected."
+
+    elif "folder" in msg or "directory" in msg or "structure" in msg:
+        folder_list = ", ".join([f.get("data", {}).get("label") or "" for f in folders[:10]])
+        text = f"This repository contains **{len(folders)} folders** in total. The top folders include: **{folder_list}**."
+        if len(folders) > 10:
+            text += f" (and {len(folders) - 10} more)."
+
+    elif "size" in msg or "big" in msg or "kilobyte" in msg or "megabyte" in msg:
+        kb = total_size / 1024
+        text = f"The parsed files in this repository sum up to **{total_size:,} bytes** (~{kb:.1f} KB). The largest file is **{max(files, key=lambda f: f.get('data', {}).get('size') or 0, default={}).get('data', {}).get('label', 'none')}**."
+
+    elif "language" in msg or "tech" in msg or "stack" in msg:
+        lang_str = ", ".join([f"*.{k} ({v} files)" for k, v in sorted(languages.items(), key=lambda x: x[1], reverse=True)[:5]])
+        text = f"Based on file extensions, the codebase language breakdown includes: **{lang_str}**."
+
+    else:
+        text = (
+            f"Here is a quick summary of **{body.repo_name}**:\n\n"
+            f"- **Structure:** {len(folders)} folders, {len(files)} files.\n"
+            f"- **Dependencies:** {len(deps)} dependency configurations detected.\n"
+            f"- **Total code size:** {total_size:,} bytes.\n"
+            f"- **Primary extensions:** {', '.join(list(languages.keys())[:4])}.\n\n"
+            "Ask me about 'dependencies', 'folders', 'size', or 'languages' to learn more!"
+        )
+
+    return ChatResponse(text=text)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Dev entrypoint
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -432,3 +548,4 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+

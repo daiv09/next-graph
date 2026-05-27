@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ReactFlow, Background, BackgroundVariant, Controls,
   ReactFlowProvider, useEdgesState, useNodesState, useReactFlow,
@@ -10,6 +10,8 @@ import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassNode, type GlassNodeData, type GlassNodeType } from './GlassNode';
+import { ChatPanel } from './components/ChatPanel';
+import { FilterBar, type FilterState } from './components/FilterBar';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -127,9 +129,11 @@ interface SearchBarProps {
   status: FetchStatus;
   errorMessage: string;
   onSubmit: (url: string) => void;
+  isFilterOpen: boolean;
+  onToggleFilter: () => void;
 }
 
-function SearchBar({ status, errorMessage, onSubmit }: SearchBarProps) {
+function SearchBar({ status, errorMessage, onSubmit, isFilterOpen, onToggleFilter }: SearchBarProps) {
   const [url, setUrl] = useState('');
   const [focused, setFocused] = useState(false);
   const loading = status === 'loading';
@@ -145,7 +149,7 @@ function SearchBar({ status, errorMessage, onSubmit }: SearchBarProps) {
       initial={{ y: -24, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ delay: 0.5, type: 'spring', stiffness: 140, damping: 18 }}
-      className="absolute top-5 left-1/2 -translate-x-1/2 z-20 w-full max-w-xl px-4"
+      className="w-full relative z-20"
       role="search"
     >
       <form
@@ -153,13 +157,13 @@ function SearchBar({ status, errorMessage, onSubmit }: SearchBarProps) {
         className={[
           'flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/10 backdrop-blur-2xl border transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.5)]',
           status === 'error' ? 'border-red-400/50 shadow-[0_0_20px_rgba(248,113,113,0.2)]'
-            : focused       ? 'border-violet-400/50 shadow-[0_0_24px_rgba(139,92,246,0.25)]'
-                            : 'border-white/20',
+            : focused ? 'border-blue-400/50 shadow-[0_0_24px_rgba(96,165,250,0.25)]'
+              : 'border-white/20',
         ].join(' ')}
       >
         {/* GitHub mark */}
         <svg className="w-5 h-5 text-white/50 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+          <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
         </svg>
 
         <input
@@ -183,16 +187,31 @@ function SearchBar({ status, errorMessage, onSubmit }: SearchBarProps) {
           disabled={loading || !url.trim()}
           aria-label={loading ? 'Loading…' : 'Visualize'}
           className={[
-            'flex items-center justify-center w-8 h-8 rounded-xl shrink-0 transition-all duration-200',
+            'flex items-center justify-center w-8 h-8 rounded-xl shrink-0 transition-all duration-200 mr-1',
             loading || !url.trim()
               ? 'bg-white/10 text-white/30 cursor-not-allowed'
               : 'bg-violet-500/70 text-white hover:bg-violet-500/90 active:scale-95',
           ].join(' ')}
         >
           {loading
-            ? <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true"><path strokeLinecap="round" d="M12 3a9 9 0 1 0 9 9" className="opacity-30"/><path strokeLinecap="round" d="M12 3a9 9 0 0 1 9 9"/></svg>
-            : <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+            ? <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true"><path strokeLinecap="round" d="M12 3a9 9 0 1 0 9 9" className="opacity-30" /><path strokeLinecap="round" d="M12 3a9 9 0 0 1 9 9" /></svg>
+            : <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
           }
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleFilter}
+          className={[
+            'flex items-center gap-1.5 px-3 h-8 rounded-xl shrink-0 transition-all duration-200 text-xs font-semibold select-none border cursor-pointer',
+            isFilterOpen
+              ? 'bg-violet-500/20 text-violet-200 border-violet-500/40 shadow-sm'
+              : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white',
+          ].join(' ')}
+          aria-label="Toggle filters"
+        >
+          <span>⚙</span>
+          <span>Filters</span>
         </button>
       </form>
 
@@ -263,23 +282,37 @@ function LoadingOverlay() {
 interface GraphCanvasProps {
   nodes: Node[];
   edges: Edge[];
+  onSelectedNodeChange: (node: Node | null) => void;
 }
 
-function GraphCanvas({ nodes: initNodes, edges: initEdges }: GraphCanvasProps) {
+function GraphCanvas({ nodes: initNodes, edges: initEdges, onSelectedNodeChange }: GraphCanvasProps) {
   const { fitView } = useReactFlow();
-  const [nodes, , onNodesChange] = useNodesState(initNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
+
+  useEffect(() => {
+    setNodes(initNodes);
+  }, [initNodes, setNodes]);
+
+  useEffect(() => {
+    setEdges(initEdges);
+  }, [initEdges, setEdges]);
 
   useEffect(() => {
     const t = setTimeout(() => fitView({ padding: 0.18, duration: 600 }), 120);
     return () => clearTimeout(t);
-  }, [fitView]);
+  }, [fitView, initNodes]);
+
+  const onSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: Node[] }) => {
+    onSelectedNodeChange(selectedNodes[0] || null);
+  }, [onSelectedNodeChange]);
 
   return (
     <ReactFlow
       nodes={nodes} edges={edges}
       onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
+      onSelectionChange={onSelectionChange}
       onInit={() => fitView({ padding: 0.18, duration: 500 })}
       fitView minZoom={0.25} maxZoom={2.5}
       defaultEdgeOptions={{ type: 'default', style: { stroke: 'rgba(255,255,255,0.15)', strokeWidth: 1.5 } }}
@@ -302,6 +335,15 @@ export default function Page() {
   const [flowData, setFlowData] = useState<{ nodes: Node[]; edges: Edge[] }>(INITIAL_FLOW);
   const [meta, setMeta] = useState<ApiMeta | null>(null);
   const [graphKey, setGraphKey] = useState(0);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    search: '',
+    showFolders: true,
+    showFiles: true,
+    showDependencies: true,
+    minSizeKb: 0,
+  });
   const abortRef = useRef<AbortController | null>(null);
 
   const handleSearch = useCallback(async (url: string) => {
@@ -311,6 +353,15 @@ export default function Page() {
     abortRef.current = controller;
 
     setFetchStatus('loading');
+    setSelectedNode(null);
+    setIsFilterOpen(false);
+    setFilters({
+      search: '',
+      showFolders: true,
+      showFiles: true,
+      showDependencies: true,
+      minSizeKb: 0,
+    });
     setErrorMessage('');
 
     try {
@@ -347,13 +398,88 @@ export default function Page() {
     }
   }, []);
 
-  const displayNodes = flowData.nodes.length;
-  const displayEdges = flowData.edges.length;
+  const filteredNodes = useMemo(() => {
+    const directMatches = new Set<string>();
+
+    flowData.nodes.forEach((node) => {
+      const label = node.data?.label?.toLowerCase() || '';
+      const searchMatch = filters.search === '' || label.includes(filters.search.toLowerCase());
+
+      const type = node.type || node.data?.nodeType;
+      let typeMatch = true;
+      if (type === 'folder') typeMatch = filters.showFolders;
+      if (type === 'file') typeMatch = filters.showFiles;
+      if (type === 'dependency') typeMatch = filters.showDependencies;
+
+      let sizeMatch = true;
+      if (filters.minSizeKb > 0 && (type === 'file' || type === 'dependency')) {
+        const size = (node.data?.size || 0) / 1024;
+        sizeMatch = size >= filters.minSizeKb;
+      }
+
+      if (type === 'root' || (searchMatch && typeMatch && sizeMatch)) {
+        directMatches.add(node.id);
+      }
+    });
+
+    const keptIds = new Set<string>(directMatches);
+    const parentMap: Record<string, string> = {};
+    flowData.edges.forEach((edge) => {
+      parentMap[edge.target] = edge.source;
+    });
+
+    directMatches.forEach((matchId) => {
+      let current = matchId;
+      while (parentMap[current]) {
+        const parentId = parentMap[current];
+        if (keptIds.has(parentId)) break;
+        keptIds.add(parentId);
+        current = parentId;
+      }
+    });
+
+    return flowData.nodes.filter((node) => keptIds.has(node.id));
+  }, [flowData.nodes, flowData.edges, filters]);
+
+  const filteredEdges = useMemo(() => {
+    const keptNodeIds = new Set(filteredNodes.map((n) => n.id));
+    return flowData.edges.filter(
+      (edge) => keptNodeIds.has(edge.source) && keptNodeIds.has(edge.target)
+    );
+  }, [flowData.edges, filteredNodes]);
+
+  const displayNodes = filteredNodes.length;
+  const displayEdges = filteredEdges.length;
   const displayLabel = meta?.repo ?? PLACEHOLDER.nodes[0]?.label ?? 'Repository';
+
+  const handleChatSendMessage = useCallback(async (text: string) => {
+    const res = await fetch('http://localhost:8000/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        repo_name: displayLabel,
+        messages: [{ sender: 'user', text }],
+        nodes: flowData.nodes,
+        edges: flowData.edges,
+        selected_node: selectedNode ? {
+          id: selectedNode.id,
+          type: selectedNode.type,
+          data: selectedNode.data,
+        } : null,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to communicate with the chat agent');
+    }
+
+    const data = await res.json() as { text: string };
+    return data.text;
+  }, [displayLabel, flowData.nodes, flowData.edges, selectedNode]);
 
   return (
     <>
-      <title>RepoGraph — GitHub Structure Visualizer</title>
+      <title>next-graph — GitHub Structure Visualizer</title>
       <meta name="description" content="Visualize any GitHub repository as a beautiful hierarchical node graph." />
 
       <main className="relative flex flex-col w-full h-screen overflow-hidden bg-[#080810]">
@@ -365,8 +491,32 @@ export default function Page() {
             'radial-gradient(ellipse 50% 50% at 10% 90%, rgba(16,185,129,0.10) 0%, transparent 60%)',
           ].join(', '),
         }} />
+        {/* Top Floating Controls */}
+        <div className="absolute top-5 left-1/2 -translate-x-1/2 z-20 w-full max-w-2xl px-4 flex flex-col items-center gap-3 pointer-events-none">
+          <div className="w-full pointer-events-auto">
+            <SearchBar
+              status={fetchStatus}
+              errorMessage={errorMessage}
+              onSubmit={handleSearch}
+              isFilterOpen={isFilterOpen}
+              onToggleFilter={() => setIsFilterOpen(!isFilterOpen)}
+            />
+          </div>
 
-        <SearchBar status={fetchStatus} errorMessage={errorMessage} onSubmit={handleSearch} />
+          <AnimatePresence>
+            {isFilterOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="w-full pointer-events-auto"
+              >
+                <FilterBar filters={filters} onChange={setFilters} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Canvas — spring entrance, keyed so it remounts on each successful fetch */}
         <motion.div
@@ -382,7 +532,12 @@ export default function Page() {
           </AnimatePresence>
 
           <ReactFlowProvider>
-            <GraphCanvas key={graphKey} nodes={flowData.nodes} edges={flowData.edges} />
+            <GraphCanvas
+              key={graphKey}
+              nodes={filteredNodes}
+              edges={filteredEdges}
+              onSelectedNodeChange={setSelectedNode}
+            />
           </ReactFlowProvider>
         </motion.div>
 
@@ -408,6 +563,14 @@ export default function Page() {
             <span className="text-[11px] text-white/40">⭐ {meta.stars.toLocaleString()}</span></>
           )}
         </motion.footer>
+
+        <ChatPanel
+          repoName={displayLabel}
+          nodesCount={displayNodes}
+          edgesCount={displayEdges}
+          selectedNode={selectedNode}
+          onSendMessage={handleChatSendMessage}
+        />
       </main>
     </>
   );
