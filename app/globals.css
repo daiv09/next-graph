@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #080810;
+  --foreground: #f0f0f8;
 }
 
 @theme inline {
@@ -10,17 +10,61 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --shadow-glass-depth: 0 8px 32px rgba(0, 0, 0, 0.45), 0 16px 48px rgba(0, 0, 0, 0.3);
+  --shadow-glass-depth-hover: 0 12px 40px rgba(0, 0, 0, 0.6), 0 20px 64px rgba(0, 0, 0, 0.45);
+  --shadow-glass-glow: 0 0 28px rgba(139, 92, 246, 0.5);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans, Arial, Helvetica, sans-serif);
+}
+
+/* ─── React Flow overrides ──────────────────────────────────────────── */
+
+/* Remove the default white pane background */
+.react-flow__renderer,
+.react-flow__pane {
+  background: transparent !important;
+}
+
+/* Style the bezier edge paths */
+.react-flow__edge-path {
+  stroke: rgba(255, 255, 255, 0.18) !important;
+  stroke-width: 1.5px !important;
+}
+
+/* Hide default edge selection outline */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: rgba(167, 139, 250, 0.6) !important;
+}
+
+/* Controls glass pill */
+.react-flow__controls {
+  border-radius: 14px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+.react-flow__controls-button {
+  background: transparent !important;
+  border: none !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  transition: color 0.2s, background 0.2s;
+}
+
+.react-flow__controls-button:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: white !important;
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor !important;
 }
