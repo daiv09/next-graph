@@ -429,6 +429,108 @@ def _raise_rate_limit(resp: httpx.Response) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class FileContentRequest(BaseModel):
+    repo_url: str
+    path: str
+    branch: str | None = None
+
+
+@app.post(
+    "/file-content",
+    summary="Retrieve file contents from GitHub or local workspace",
+)
+async def get_file_content(body: FileContentRequest):
+    # For placeholder/local file preview testing
+    if "owner/repository" in body.repo_url or "next-graph" in body.repo_url:
+        import os
+        # Convert path delimiters if needed
+        norm_path = body.path.replace("/", os.sep)
+        local_path = os.path.join(os.getcwd(), norm_path)
+        if os.path.exists(local_path) and os.path.isfile(local_path):
+            try:
+                with open(local_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return {"content": f.read()}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Local read error: {str(e)}")
+
+    try:
+        owner, repo = _extract_owner_repo(body.repo_url)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
+
+    branch = body.branch or "main"
+    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{body.path}"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(raw_url, follow_redirects=True, timeout=10.0)
+            if resp.status_code == 404 and not body.branch:
+                # Try fallback branch "master"
+                fallback_url = f"https://raw.githubusercontent.com/{owner}/{repo}/master/{body.path}"
+                resp = await client.get(fallback_url, follow_redirects=True, timeout=10.0)
+            
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=resp.status_code,
+                    detail=f"Failed to fetch file content from GitHub (status: {resp.status_code})"
+                )
+            
+            return {"content": resp.text}
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=502, detail=f"GitHub connection error: {str(exc)}")
+
+
+class FileContentRequest(BaseModel):
+    repo_url: str
+    path: str
+    branch: str | None = None
+
+
+@app.post(
+    "/file-content",
+    summary="Retrieve file contents from GitHub or local workspace",
+)
+async def get_file_content(body: FileContentRequest):
+    # For placeholder/local file preview testing
+    if "owner/repository" in body.repo_url or "next-graph" in body.repo_url:
+        import os
+        # Convert path delimiters if needed
+        norm_path = body.path.replace("/", os.sep)
+        local_path = os.path.join(os.getcwd(), norm_path)
+        if os.path.exists(local_path) and os.path.isfile(local_path):
+            try:
+                with open(local_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return {"content": f.read()}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Local read error: {str(e)}")
+
+    try:
+        owner, repo = _extract_owner_repo(body.repo_url)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
+
+    branch = body.branch or "main"
+    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{body.path}"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(raw_url, follow_redirects=True, timeout=10.0)
+            if resp.status_code == 404 and not body.branch:
+                # Try fallback branch "master"
+                fallback_url = f"https://raw.githubusercontent.com/{owner}/{repo}/master/{body.path}"
+                resp = await client.get(fallback_url, follow_redirects=True, timeout=10.0)
+            
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=resp.status_code,
+                    detail=f"Failed to fetch file content from GitHub (status: {resp.status_code})"
+                )
+            
+            return {"content": resp.text}
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=502, detail=f"GitHub connection error: {str(exc)}")
+
+
 class ChatMessageModel(BaseModel):
     sender: Literal["user", "agent"]
     text: str

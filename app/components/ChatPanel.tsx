@@ -17,6 +17,7 @@ interface ChatPanelProps {
   edgesCount: number;
   selectedNode: Node | null;
   onSendMessage: (text: string) => Promise<string>;
+  onViewCode?: (node: Node) => void;
 }
 
 export function ChatPanel({
@@ -25,6 +26,7 @@ export function ChatPanel({
   edgesCount,
   selectedNode,
   onSendMessage,
+  onViewCode,
 }: ChatPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -200,10 +202,21 @@ export function ChatPanel({
                     <span className="text-violet-300 font-semibold truncate">
                       {selectedNode.data?.label || selectedNode.id}
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/50 border border-white/5 shrink-0 uppercase tracking-wider">
-                      {selectedNode.type || 'node'}
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/50 border border-white/5 shrink-0 uppercase tracking-wider font-mono">
+                      {selectedNode.data?.nodeType || selectedNode.type || 'node'}
                     </span>
                   </div>
+                  
+                  {/* View Code Button */}
+                  {(selectedNode.data?.nodeType === 'file' || selectedNode.data?.nodeType === 'dependency') && onViewCode && (
+                    <button
+                      type="button"
+                      onClick={() => onViewCode(selectedNode)}
+                      className="ml-2 shrink-0 px-2 py-1 rounded bg-violet-500/20 text-violet-200 border border-violet-500/30 hover:bg-violet-500/30 text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-95"
+                    >
+                      View Code
+                    </button>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

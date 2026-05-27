@@ -12,13 +12,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { GlassNode, type GlassNodeData, type GlassNodeType } from './GlassNode';
 import { ChatPanel } from './components/ChatPanel';
 import { FilterBar, type FilterState } from './components/FilterBar';
+import FilePreviewPanel from './components/FilePreviewPanel';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type FetchStatus = 'idle' | 'loading' | 'success' | 'error';
 type NodeKind = 'root' | 'folder' | 'file' | 'dependency';
 
-interface RepoNode { id: string; label: string; type: NodeKind; language?: string; size?: number; description?: string; }
+interface RepoNode { id: string; label: string; type: NodeKind; path?: string; language?: string; size?: number; description?: string; }
 interface RepoEdge  { id: string; source: string; target: string; }
 interface RepoGraphPayload { nodes: RepoNode[]; edges: RepoEdge[]; }
 
@@ -28,7 +29,7 @@ interface ApiEdge { id: string; source: string; target: string; }
 interface ApiMeta { owner: string; repo: string; default_branch: string; description: string; stars: number; language: string; total_nodes: number; total_edges: number; truncated: boolean; }
 interface ApiResponse { nodes: ApiNode[]; edges: ApiEdge[]; meta: ApiMeta; }
 
-type GlassNodeData = { label: string; nodeType: NodeKind; language?: string; size?: number; description?: string; };
+type GlassNodeData = { label: string; nodeType: NodeKind; path?: string; language?: string; size?: number; description?: string; };
 type GlassNodeType = Node<GlassNodeData, 'glass'>;
 
 // ── Placeholder payload ────────────────────────────────────────────────────
@@ -36,21 +37,21 @@ type GlassNodeType = Node<GlassNodeData, 'glass'>;
 const PLACEHOLDER: RepoGraphPayload = {
   nodes: [
     { id: 'root', label: 'next-graph', type: 'root', description: 'GitHub Repository Root' },
-    { id: 'app',  label: 'app/',       type: 'folder' },
-    { id: 'components', label: 'components/', type: 'folder' },
-    { id: 'lib',  label: 'lib/',       type: 'folder' },
-    { id: 'public', label: 'public/', type: 'folder' },
-    { id: 'page', label: 'page.tsx',  type: 'file', language: 'TypeScript', size: 8200 },
-    { id: 'layout', label: 'layout.tsx', type: 'file', language: 'TypeScript', size: 720 },
-    { id: 'globals', label: 'globals.css', type: 'file', language: 'CSS', size: 490 },
-    { id: 'graph', label: 'GraphCanvas.tsx', type: 'file', language: 'TypeScript', size: 3400 },
-    { id: 'search', label: 'SearchBar.tsx', type: 'file', language: 'TypeScript', size: 1200 },
-    { id: 'utils', label: 'utils.ts', type: 'file', language: 'TypeScript', size: 900 },
-    { id: 'logo', label: 'logo.svg', type: 'file', size: 220 },
-    { id: 'favicon', label: 'favicon.ico', type: 'file', size: 25900 },
-    { id: 'pkg', label: 'package.json', type: 'dependency', size: 535 },
-    { id: 'tsconfig', label: 'tsconfig.json', type: 'file', size: 670 },
-    { id: 'nextcfg', label: 'next.config.ts', type: 'file', language: 'TypeScript', size: 135 },
+    { id: 'app',  label: 'app/',       type: 'folder', path: 'app' },
+    { id: 'components', label: 'components/', type: 'folder', path: 'app/components' },
+    { id: 'lib',  label: 'lib/',       type: 'folder', path: 'app' },
+    { id: 'public', label: 'public/', type: 'folder', path: 'public' },
+    { id: 'page', label: 'page.tsx',  type: 'file', path: 'app/page.tsx', language: 'TypeScript', size: 8200 },
+    { id: 'layout', label: 'layout.tsx', type: 'file', path: 'app/layout.tsx', language: 'TypeScript', size: 720 },
+    { id: 'globals', label: 'globals.css', type: 'file', path: 'app/globals.css', language: 'CSS', size: 490 },
+    { id: 'graph', label: 'GraphCanvas.tsx', type: 'file', path: 'app/page.tsx', language: 'TypeScript', size: 3400 },
+    { id: 'search', label: 'SearchBar.tsx', type: 'file', path: 'app/page.tsx', language: 'TypeScript', size: 1200 },
+    { id: 'utils', label: 'utils.ts', type: 'file', path: 'app/layoutUtils.ts', language: 'TypeScript', size: 900 },
+    { id: 'logo', label: 'logo.svg', type: 'file', path: 'public/logo.svg', size: 220 },
+    { id: 'favicon', label: 'favicon.ico', type: 'file', path: 'public/favicon.ico', size: 25900 },
+    { id: 'pkg', label: 'package.json', type: 'dependency', path: 'package.json', size: 535 },
+    { id: 'tsconfig', label: 'tsconfig.json', type: 'file', path: 'tsconfig.json', size: 670 },
+    { id: 'nextcfg', label: 'next.config.ts', type: 'file', path: 'next.config.ts', language: 'TypeScript', size: 135 },
   ],
   edges: [
     { id: 'e1', source: 'root', target: 'app' },
@@ -98,7 +99,7 @@ function buildFromPlaceholder(pl: RepoGraphPayload): { nodes: Node[]; edges: Edg
   }));
   const rfNodes: Node[] = pl.nodes.map(n => ({
     id: n.id, type: 'glass', position: { x: 0, y: 0 },
-    data: { label: n.label, nodeType: n.type, language: n.language, size: n.size, description: n.description } satisfies GlassNodeData,
+    data: { label: n.label, nodeType: n.type, path: n.path, language: n.language, size: n.size, description: n.description } satisfies GlassNodeData,
   }));
   return { nodes: applyDagreLayout(rfNodes, rfEdges), edges: rfEdges };
 }
@@ -114,6 +115,7 @@ function buildFromApi(api: ApiResponse): { nodes: Node[]; edges: Edge[] } {
     data: {
       label: n.data.label,
       nodeType: n.type,
+      path: n.data.path,
       size: n.data.size,
       description: n.data.description,
     } satisfies GlassNodeData,
@@ -283,9 +285,15 @@ interface GraphCanvasProps {
   nodes: Node[];
   edges: Edge[];
   onSelectedNodeChange: (node: Node | null) => void;
+  onNodeDoubleClick?: (event: React.MouseEvent, node: Node) => void;
 }
 
-function GraphCanvas({ nodes: initNodes, edges: initEdges, onSelectedNodeChange }: GraphCanvasProps) {
+function GraphCanvas({
+  nodes: initNodes,
+  edges: initEdges,
+  onSelectedNodeChange,
+  onNodeDoubleClick,
+}: GraphCanvasProps) {
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
@@ -313,6 +321,7 @@ function GraphCanvas({ nodes: initNodes, edges: initEdges, onSelectedNodeChange 
       onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
       onSelectionChange={onSelectionChange}
+      onNodeDoubleClick={onNodeDoubleClick}
       onInit={() => fitView({ padding: 0.18, duration: 500 })}
       fitView minZoom={0.25} maxZoom={2.5}
       defaultEdgeOptions={{ type: 'default', style: { stroke: 'rgba(255,255,255,0.15)', strokeWidth: 1.5 } }}
@@ -345,6 +354,14 @@ export default function Page() {
     minSizeKb: 0,
   });
   const abortRef = useRef<AbortController | null>(null);
+  const [previewNode, setPreviewNode] = useState<Node | null>(null);
+
+  const handleNodeDoubleClick = useCallback((_evt: React.MouseEvent, node: Node) => {
+    const nodeType = node.data?.nodeType || node.type;
+    if (nodeType === 'file' || nodeType === 'dependency') {
+      setPreviewNode(node);
+    }
+  }, []);
 
   const handleSearch = useCallback(async (url: string) => {
     // Cancel any in-flight request
@@ -354,6 +371,7 @@ export default function Page() {
 
     setFetchStatus('loading');
     setSelectedNode(null);
+    setPreviewNode(null);
     setIsFilterOpen(false);
     setFilters({
       search: '',
@@ -537,6 +555,7 @@ export default function Page() {
               nodes={filteredNodes}
               edges={filteredEdges}
               onSelectedNodeChange={setSelectedNode}
+              onNodeDoubleClick={handleNodeDoubleClick}
             />
           </ReactFlowProvider>
         </motion.div>
@@ -570,7 +589,21 @@ export default function Page() {
           edgesCount={displayEdges}
           selectedNode={selectedNode}
           onSendMessage={handleChatSendMessage}
+          onViewCode={(node) => setPreviewNode(node)}
         />
+
+        <AnimatePresence>
+          {previewNode && (
+            <FilePreviewPanel
+              repoUrl={meta?.owner ? `https://github.com/${meta.owner}/${meta.repo}` : 'owner/repository'}
+              path={previewNode.data?.path || previewNode.data?.label || previewNode.id}
+              label={previewNode.data?.label || previewNode.id}
+              size={previewNode.data?.size}
+              nodeType={previewNode.data?.nodeType || 'file'}
+              onClose={() => setPreviewNode(null)}
+            />
+          )}
+        </AnimatePresence>
       </main>
     </>
   );
