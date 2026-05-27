@@ -18,6 +18,9 @@ import { useCommitContext } from '../context/CommitContext';
 import { useTimelineAnimation } from '../hooks/useTimelineAnimation';
 import { applyDagreLayout } from '../utils/graphBuilder';
 import { useAnalyticsContext } from '../context/AnalyticsContext';
+import { ContextMenu } from './ContextMenu';
+import { useAnnotations } from '../hooks/useAnnotations';
+import type { ContextMenuState } from '../types';
 
 interface GraphCanvasProps {
   nodes: Node[];
@@ -41,6 +44,14 @@ export function GraphCanvas({
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
+
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    toggled: false,
+    x: 0,
+    y: 0,
+    nodeId: null,
+  });
 
   // 1. Auto-collapse state for smart clustering
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => {
@@ -80,9 +91,30 @@ export function GraphCanvas({
     }
   }, [onNodeDoubleClick]);
 
+  // Handle right-click on a node
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault(); // Prevent default browser menu
+    
+    // Calculate position relative to the container if needed, or just use page coordinates
+    setContextMenu({
+      toggled: true,
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: node.id,
+    });
+  }, []);
+
+  // Close context menu on canvas click
+  const onPaneClick = useCallback(() => {
+    if (contextMenu.toggled) {
+      setContextMenu(prev => ({ ...prev, toggled: false }));
+    }
+  }, [contextMenu.toggled]);
+
   // Compute dynamic graph structure and layout for the current commit
   const { nodeStates } = useTimelineAnimation();
   const { activeFilter } = useAnalyticsContext();
+  const { annotations, addAnnotation, updateAnnotation, removeAnnotation } = useAnnotations();
 
   const { timelineNodes, timelineEdges } = useMemo(() => {
     if (!initNodes || initNodes.length === 0) return { timelineNodes: [], timelineEdges: [] };
@@ -245,8 +277,21 @@ export function GraphCanvas({
        };
     });
 
-    return { timelineNodes: finalNodes, timelineEdges: visibleEdgesRaw };
-  }, [initNodes, initEdges, nodeStates, expandedFolderIds]);
+    const annotationNodes: Node[] = annotations.map(a => ({
+      id: a.id,
+      type: 'annotation',
+      parentId: a.nodeId,
+      position: { x: 120, y: -40 }, // Positioned relative to parent
+      data: {
+        text: a.text,
+        onUpdate: (text: string) => updateAnnotation(a.id, text),
+        onDelete: () => removeAnnotation(a.id),
+      },
+      draggable: false, // Prevent ReactFlow from overriding positions without saving
+    }));
+
+    return { timelineNodes: [...finalNodes, ...annotationNodes], timelineEdges: visibleEdgesRaw };
+  }, [initNodes, initEdges, nodeStates, expandedFolderIds, activeFilter, annotations, updateAnnotation, removeAnnotation]);
 
   useEffect(() => {
     setNodes(timelineNodes);
@@ -269,30 +314,62 @@ export function GraphCanvas({
   );
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      nodeTypes={nodeTypes}
-      onSelectionChange={onSelectionChange}
-      onNodeDoubleClick={handleNodeDoubleClick}
-      onInit={() => fitView({ padding: 0.18, duration: 500 })}
-      fitView
-      minZoom={0.25}
-      maxZoom={2.5}
-      defaultEdgeOptions={{
-        type: 'default',
-        style: { stroke: 'rgba(255,255,255,0.15)', strokeWidth: 1.5 },
-      }}
-      proOptions={{ hideAttribution: true }}
-      className="!bg-transparent"
-    >
-      <Background variant={BackgroundVariant.Dots} gap={28} size={1} color="rgba(255,255,255,0.08)" />
-      <Controls
-        className="!bg-white/10 !backdrop-blur-xl !border !border-white/20 !rounded-xl !shadow-lg"
-        showInteractive={false}
+    <>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeTypes={nodeTypes}
+        onSelectionChange={onSelectionChange}
+        onNodeDoubleClick={handleNodeDoubleClick}
+        onNodeContextMenu={onNodeContextMenu}
+        onPaneClick={onPaneClick}
+        onInit={() => fitView({ padding: 0.18, duration: 500 })}
+        fitView
+        minZoom={0.25}
+        maxZoom={2.5}
+        defaultEdgeOptions={{
+          type: 'default',
+          style: { stroke: 'rgba(255,255,255,0.15)', strokeWidth: 1.5 },
+        }}
+        proOptions={{ hideAttribution: true }}
+        className="!bg-transparent"
+      >
+        <Background variant={BackgroundVariant.Dots} gap={28} size={1} color="rgba(255,255,255,0.08)" />
+        <Controls
+          className="!bg-white/10 !backdrop-blur-xl !border !border-white/20 !rounded-xl !shadow-lg"
+          showInteractive={false}
+        />
+      </ReactFlow>
+
+      <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        isOpen={contextMenu.toggled}
+        onClose={() => setContextMenu(prev => ({ ...prev, toggled: false }))}
+        onFocus={() => {
+          if (contextMenu.nodeId) {
+            const target = nodes.find(n => n.id === contextMenu.nodeId);
+            if (target) {
+              fitView({ nodes: [target], duration: 800, padding: 0.5, maxZoom: 1.5 });
+            }
+          }
+        }}
+        onAnnotate={() => {
+          if (contextMenu.nodeId) {
+            addAnnotation(contextMenu.nodeId, contextMenu.x, contextMenu.y);
+          }
+        }}
+        onViewDetails={() => {
+          if (contextMenu.nodeId && onNodeDoubleClick) {
+            const target = nodes.find(n => n.id === contextMenu.nodeId);
+            if (target) {
+              onNodeDoubleClick({} as React.MouseEvent, target);
+            }
+          }
+        }}
       />
-    </ReactFlow>
+    </>
   );
 }

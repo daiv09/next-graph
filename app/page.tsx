@@ -20,8 +20,10 @@ import { PLACEHOLDER } from './utils/constants';
 import type { Node, Edge, NodeTypes } from '@xyflow/react';
 import type { GlassNodeData, NodeKind, FetchStatus } from './types';
 
+import { AnnotationNode } from './components/AnnotationNode';
+
 // ── Node Types ────────────────────────────────────────────────────────────────
-const nodeTypes: NodeTypes = { glass: GlassNode };
+const nodeTypes: NodeTypes = { glass: GlassNode, annotation: AnnotationNode };
 const INITIAL_FLOW = buildFromPlaceholder(PLACEHOLDER);
 
 // ── Inner component (needs CommitContext already mounted) ─────────────────────

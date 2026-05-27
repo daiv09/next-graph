@@ -82,3 +82,18 @@ export type GlassNodeData = {
   isHighlighted?: boolean;
   isDimmed?: boolean;
 };
+
+export interface Annotation {
+  id: string;
+  nodeId: string;
+  text: string;
+  x: number;
+  y: number;
+}
+
+export interface ContextMenuState {
+  toggled: boolean;
+  x: number;
+  y: number;
+  nodeId: string | null;
+}
