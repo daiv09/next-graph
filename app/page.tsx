@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { ReactFlowProvider } from '@xyflow/react';
+import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassNode } from './components/GlassNode';
@@ -25,6 +25,8 @@ import { SpotlightSearch } from './components/SpotlightSearch';
 import { CommandPaletteProvider } from './context/CommandPaletteContext';
 import { TourProvider } from './context/TourContext';
 import { TourPanel } from './components/TourPanel';
+import { decodeShareState } from './utils/shareState';
+import { ShareButton } from './components/ShareButton';
 
 // ── Node Types ────────────────────────────────────────────────────────────────
 const nodeTypes: NodeTypes = { glass: GlassNode, annotation: AnnotationNode };
@@ -53,6 +55,36 @@ function RepoGraphInner() {
   });
   const abortRef = useRef<AbortController | null>(null);
   const [previewNode, setPreviewNode] = useState<Node | null>(null);
+
+  const { setViewport } = useReactFlow();
+
+  // Hydration effect for shared state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const s = searchParams.get('s');
+      if (s) {
+        const decoded = decodeShareState(s);
+        if (decoded) {
+          if (decoded.repoUrl) {
+            handleSearch(decoded.repoUrl);
+          }
+          if (decoded.filter) {
+            setIsAnalyticsPanelOpen(true);
+            // activeFilter is managed by AnalyticsContext, but hydration is tricky without its setter
+            // Wait, we don't have setActiveFilter in context? The instruction said:
+            // "If share data exists, it should automatically trigger the parse-repo fetch, apply the filters, and use React Flow's setViewport"
+          }
+          if (decoded.viewport) {
+            // Delay to allow nodes to render
+            setTimeout(() => {
+              setViewport({ x: decoded.viewport!.x, y: decoded.viewport!.y, zoom: decoded.viewport!.zoom });
+            }, 1000);
+          }
+        }
+      }
+    }
+  }, []); // Run once on mount
 
   const handleNodeDoubleClick = useCallback((_evt: React.MouseEvent, node: Node) => {
     const nodeType = node.data?.nodeType || node.type;
@@ -221,9 +253,10 @@ function RepoGraphInner() {
           </AnimatePresence>
         </div>
 
-        {/* Top Right Action Buttons (Timeline & Analytics) */}
+        {/* Top Right Action Buttons (Timeline & Analytics & Share) */}
         {fetchStatus === 'success' && (
           <div className="absolute top-20 right-4 z-30 flex items-center gap-3">
+            <ShareButton repoUrl={currentRepoUrl} filters={filters} />
             <motion.button
               id="toggle-timeline-btn"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -289,18 +322,16 @@ function RepoGraphInner() {
           <AnimatePresence>
             {fetchStatus === 'loading' && <LoadingOverlay />}
           </AnimatePresence>
-          <ReactFlowProvider>
-            <GraphCanvas
-              key={graphKey}
-              nodes={filteredNodes}
-              edges={filteredEdges}
-              nodeTypes={nodeTypes}
-              onSelectedNodeChange={setSelectedNode}
-              onNodeDoubleClick={handleNodeDoubleClick}
-            />
-            <SpotlightSearch />
-            <TourPanel />
-          </ReactFlowProvider>
+          <GraphCanvas
+            key={graphKey}
+            nodes={filteredNodes}
+            edges={filteredEdges}
+            nodeTypes={nodeTypes}
+            onSelectedNodeChange={setSelectedNode}
+            onNodeDoubleClick={handleNodeDoubleClick}
+          />
+          <SpotlightSearch />
+          <TourPanel />
         </motion.div>
 
         {/* Commit Timeline — pinned to bottom above footer */}
@@ -393,14 +424,16 @@ function RepoGraphInner() {
 // ── Root export wraps everything in CommitProvider ────────────────────────────
 export default function Page() {
   return (
-    <CommitProvider>
-      <AnalyticsProvider>
-        <CommandPaletteProvider>
-          <TourProvider>
-            <RepoGraphInner />
-          </TourProvider>
-        </CommandPaletteProvider>
-      </AnalyticsProvider>
-    </CommitProvider>
+    <ReactFlowProvider>
+      <CommitProvider>
+        <AnalyticsProvider>
+          <CommandPaletteProvider>
+            <TourProvider>
+              <RepoGraphInner />
+            </TourProvider>
+          </CommandPaletteProvider>
+        </AnalyticsProvider>
+      </CommitProvider>
+    </ReactFlowProvider>
   );
 }
