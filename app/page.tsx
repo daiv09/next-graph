@@ -23,6 +23,8 @@ import type { GlassNodeData, NodeKind, FetchStatus } from './types';
 import { AnnotationNode } from './components/AnnotationNode';
 import { SpotlightSearch } from './components/SpotlightSearch';
 import { CommandPaletteProvider } from './context/CommandPaletteContext';
+import { TourProvider } from './context/TourContext';
+import { TourPanel } from './components/TourPanel';
 
 // ── Node Types ────────────────────────────────────────────────────────────────
 const nodeTypes: NodeTypes = { glass: GlassNode, annotation: AnnotationNode };
@@ -297,6 +299,7 @@ function RepoGraphInner() {
               onNodeDoubleClick={handleNodeDoubleClick}
             />
             <SpotlightSearch />
+            <TourPanel />
           </ReactFlowProvider>
         </motion.div>
 
@@ -393,7 +396,9 @@ export default function Page() {
     <CommitProvider>
       <AnalyticsProvider>
         <CommandPaletteProvider>
-          <RepoGraphInner />
+          <TourProvider>
+            <RepoGraphInner />
+          </TourProvider>
         </CommandPaletteProvider>
       </AnalyticsProvider>
     </CommitProvider>

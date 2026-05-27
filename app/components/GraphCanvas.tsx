@@ -21,6 +21,7 @@ import { useAnalyticsContext } from '../context/AnalyticsContext';
 import { ContextMenu } from './ContextMenu';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { useCommandPaletteContext } from '../context/CommandPaletteContext';
+import { useTour } from '../context/TourContext';
 import type { ContextMenuState } from '../types';
 
 interface GraphCanvasProps {
@@ -116,6 +117,7 @@ export function GraphCanvas({
   const { nodeStates } = useTimelineAnimation();
   const { activeFilter } = useAnalyticsContext();
   const { activeItemId } = useCommandPaletteContext();
+  const { isActive: isTourActive, tourSteps, currentStepIndex } = useTour();
   const { annotations, addAnnotation, updateAnnotation, removeAnnotation } = useAnnotations();
 
   const { timelineNodes, timelineEdges } = useMemo(() => {
@@ -258,11 +260,15 @@ export function GraphCanvas({
           ? (nodeStates[path] || 'visible') 
           : 'visible';
 
-       // Command Palette Highlight Logic
+       // Highlight Logic
        let isHighlighted = false;
        let isDimmed = false;
 
-       if (activeItemId && activeItemId.startsWith('node-')) {
+       if (isTourActive && tourSteps.length > 0) {
+         const currentTarget = tourSteps[currentStepIndex]?.targetNodeId;
+         isHighlighted = n.id === currentTarget;
+         isDimmed = !isHighlighted;
+       } else if (activeItemId && activeItemId.startsWith('node-')) {
          const targetId = activeItemId.replace('node-', '');
          isHighlighted = n.id === targetId;
          isDimmed = !isHighlighted;
@@ -304,7 +310,7 @@ export function GraphCanvas({
     }));
 
     return { timelineNodes: [...finalNodes, ...annotationNodes], timelineEdges: visibleEdgesRaw };
-  }, [initNodes, initEdges, nodeStates, expandedFolderIds, activeFilter, activeItemId, annotations, updateAnnotation, removeAnnotation]);
+  }, [initNodes, initEdges, nodeStates, expandedFolderIds, activeFilter, activeItemId, isTourActive, tourSteps, currentStepIndex, annotations, updateAnnotation, removeAnnotation]);
 
   useEffect(() => {
     setNodes(timelineNodes);
@@ -325,6 +331,22 @@ export function GraphCanvas({
     },
     [onSelectedNodeChange],
   );
+
+  // Tour Cinematic Camera Sync
+  useEffect(() => {
+    if (isTourActive && tourSteps.length > 0 && nodes.length > 0) {
+      const step = tourSteps[currentStepIndex];
+      const targetNode = nodes.find(n => n.id === step.targetNodeId);
+      if (targetNode) {
+        fitView({
+          nodes: [targetNode],
+          duration: 1200,
+          padding: 0.5,
+          maxZoom: step.zoomLevel || 1.2
+        });
+      }
+    }
+  }, [isTourActive, currentStepIndex, tourSteps, nodes, fitView]);
 
   return (
     <>

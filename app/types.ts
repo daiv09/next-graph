@@ -97,3 +97,11 @@ export interface ContextMenuState {
   y: number;
   nodeId: string | null;
 }
+
+export interface TourStep {
+  stepId: string;
+  targetNodeId: string;
+  title: string;
+  narration: string;
+  zoomLevel: number;
+}

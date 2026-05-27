@@ -219,3 +219,57 @@ def calculate_analytics(tree_items: list[dict[str, Any]]) -> dict[str, Any]:
         "sizeDistribution": distribution_list,
         "radar": radar_list
     }
+
+def generate_tour_steps(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    steps = []
+    
+    # 1. Start at root
+    steps.append({
+        "stepId": "tour-step-1",
+        "targetNodeId": "root",
+        "title": "Welcome to the Repository",
+        "narration": "This is the root of the project. Let's take a guided tour to understand the architecture and key components of this codebase.",
+        "zoomLevel": 0.8
+    })
+    
+    # 2. Find a main dependency file (e.g. package.json, requirements.txt, go.mod)
+    deps = [n for n in nodes if n.get("type") == "dependency" or n.get("data", {}).get("nodeType") == "dependency"]
+    if deps:
+        target = deps[0]
+        steps.append({
+            "stepId": "tour-step-2",
+            "targetNodeId": target.get("id", ""),
+            "title": "Dependencies & Configuration",
+            "narration": f"Here is {target.get('data', {}).get('label', 'a dependency file')}. This file defines the core libraries and system requirements needed to run the project.",
+            "zoomLevel": 1.2
+        })
+        
+    # 3. Find the largest file (often core logic)
+    files = [n for n in nodes if n.get("type") not in ("folder", "root", "dir") and n.get("data", {}).get("nodeType") not in ("folder", "root", "dir")]
+    files.sort(key=lambda x: x.get("data", {}).get("size", 0), reverse=True)
+    if files:
+        target = files[0]
+        label = target.get("data", {}).get("label", "file")
+        steps.append({
+            "stepId": "tour-step-3",
+            "targetNodeId": target.get("id", ""),
+            "title": "Heavyweight Logic",
+            "narration": f"This is {label}, the largest file in the codebase. It likely contains complex business logic or a massive component structure.",
+            "zoomLevel": 1.5
+        })
+        
+    # 4. Find the deepest nested folder
+    folders = [n for n in nodes if n.get("type") in ("folder", "dir") or n.get("data", {}).get("nodeType") in ("folder", "dir")]
+    folders.sort(key=lambda x: str(x.get("data", {}).get("path", "")).count("/"), reverse=True)
+    if folders:
+        target = folders[0]
+        label = target.get("data", {}).get("label", "folder")
+        steps.append({
+            "stepId": "tour-step-4",
+            "targetNodeId": target.get("id", ""),
+            "title": "Deepest Architecture",
+            "narration": f"We've reached {label}, the most deeply nested module in the architecture. This represents highly specific sub-domain logic.",
+            "zoomLevel": 1.3
+        })
+        
+    return steps

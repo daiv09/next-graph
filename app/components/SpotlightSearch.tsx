@@ -2,12 +2,15 @@
 import React, { useEffect, useMemo } from 'react';
 import { Command } from 'cmdk';
 import { useCommandPaletteContext } from '../context/CommandPaletteContext';
-import { useNodes, useReactFlow } from '@xyflow/react';
+import { useTour } from '../context/TourContext';
+import { useNodes, useReactFlow, useEdges } from '@xyflow/react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function SpotlightSearch() {
   const { isOpen, close, setActiveItemId } = useCommandPaletteContext();
+  const { startTour } = useTour();
   const nodes = useNodes();
+  const edges = useEdges();
   const { fitView } = useReactFlow();
 
   // Reset active item when closed
@@ -27,6 +30,23 @@ export function SpotlightSearch() {
     const target = nodes.find(n => n.id === id);
     if (target) {
       fitView({ nodes: [target], duration: 800, padding: 0.5, maxZoom: 1.5 });
+    }
+    close();
+  };
+
+  const handleStartTour = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/generate-tour', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodes, edges }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        startTour(data.steps);
+      }
+    } catch (e) {
+      console.error("Failed to generate tour", e);
     }
     close();
   };
@@ -143,6 +163,14 @@ export function SpotlightSearch() {
                 )}
 
                 <Command.Group heading="Actions" className="cmdk-group">
+                  <Command.Item
+                    value="action-tour"
+                    onSelect={handleStartTour}
+                    className="cmdk-item"
+                  >
+                    <span style={{ marginRight: '10px', opacity: 0.7 }}>🎬</span>
+                    Start Guided Tour
+                  </Command.Item>
                   <Command.Item
                     value="action-reset"
                     onSelect={() => {

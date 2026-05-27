@@ -220,3 +220,11 @@ async def get_commit_files(body: CommitHistoryRequest) -> CommitHistoryResponse:
             })
 
         return CommitHistoryResponse(commits=results)
+
+from schemas import GenerateTourRequest
+from services import generate_tour_steps
+
+@router.post("/generate-tour")
+def api_generate_tour(body: GenerateTourRequest):
+    steps = generate_tour_steps(body.nodes, body.edges)
+    return {"steps": steps}

@@ -70,3 +70,14 @@ class CommitData(BaseModel):
 
 class CommitHistoryResponse(BaseModel):
     commits: list[CommitData]
+
+class TourStep(BaseModel):
+    stepId: str
+    targetNodeId: str
+    title: str
+    narration: str
+    zoomLevel: float
+
+class GenerateTourRequest(BaseModel):
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
