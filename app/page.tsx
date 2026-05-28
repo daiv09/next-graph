@@ -12,6 +12,7 @@ import { SearchBar } from './components/SearchBar';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { GraphCanvas } from './components/GraphCanvas';
 import { CommitTimeline } from './components/CommitTimeline';
+import SpatialBrowser3D from './components/SpatialBrowser3D';
 import { CommitProvider, useCommitContext } from './context/CommitContext';
 import { AnalyticsProvider, useAnalyticsContext } from './context/AnalyticsContext';
 import { AnalyticsPanel } from './components/AnalyticsPanel';
@@ -50,6 +51,7 @@ function RepoGraphInner() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
   const [isHeatmapMode, setIsHeatmapMode] = useState(false);
+  const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
   const [currentRepoUrl, setCurrentRepoUrl] = useState('');
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -314,19 +316,29 @@ function RepoGraphInner() {
             <button onClick={() => setShowTimeline(!showTimeline)} className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition">🎬 Timeline</button>
             {meta?.analytics && <button onClick={() => setIsAnalyticsPanelOpen(!isAnalyticsPanelOpen)} className="p-2 bg-white/10 rounded-lg">📊 Analytics</button>}
             <button onClick={() => setIsHeatmapMode(!isHeatmapMode)} className={`p-2 rounded-lg transition ${isHeatmapMode ? 'bg-red-500/20 text-red-200 border border-red-500/30' : 'bg-white/10 hover:bg-white/20 text-white'}`}>🔥 Heatmap</button>
+            <button onClick={() => setViewMode(viewMode === '2D' ? '3D' : '2D')} className="p-2 bg-violet-600/80 text-white rounded-lg hover:bg-violet-600 transition font-medium border border-violet-500/20 shadow-md">{viewMode === '2D' ? '🕶️ 3D View' : '🖥️ 2D View'}</button>
           </aside>
         )}
 
         {/* --- CENTER LAYER: The Graph Canvas --- */}
         <section className="flex-1 w-full h-full relative z-10">
-          <GraphCanvas
-            nodes={processedGraph.nodes}
-            edges={processedGraph.edges}
-            nodeTypes={nodeTypes}
-            onSelectedNodeChange={setSelectedNode}
-            onNodeClick={handleNodeClick}
-            onNodeDoubleClick={handleNodeDoubleClick}
-          />
+          {viewMode === '3D' ? (
+            <SpatialBrowser3D
+              nodes={processedGraph.nodes}
+              edges={processedGraph.edges}
+              onNodeClick={handleNodeClick}
+              onNodeDoubleClick={handleNodeDoubleClick}
+            />
+          ) : (
+            <GraphCanvas
+              nodes={processedGraph.nodes}
+              edges={processedGraph.edges}
+              nodeTypes={nodeTypes}
+              onSelectedNodeChange={setSelectedNode}
+              onNodeClick={handleNodeClick}
+              onNodeDoubleClick={handleNodeDoubleClick}
+            />
+          )}
           {/* Spotlight Search Overlay */}
           <SpotlightSearch />
 
