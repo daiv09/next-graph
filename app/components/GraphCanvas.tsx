@@ -30,6 +30,7 @@ interface GraphCanvasProps {
   edges: Edge[];
   nodeTypes: NodeTypes;
   onSelectedNodeChange: (node: Node | null) => void;
+  onNodeClick?: (event: React.MouseEvent, node: Node) => void;
   onNodeDoubleClick?: (event: React.MouseEvent, node: Node) => void;
 }
 
@@ -42,7 +43,8 @@ export function GraphCanvas({
   edges: initEdges,
   nodeTypes,
   onSelectedNodeChange,
-  onNodeDoubleClick,
+  onNodeClick,
+  onNodeDoubleClick
 }: GraphCanvasProps) {
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
@@ -76,19 +78,34 @@ export function GraphCanvas({
     }
   }, [initNodes]);
 
-  // Handle double-clicking a node
-  const handleNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
+  // Handle single-clicking a node
+  const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     const type = node.data?.nodeType || node.type;
     // 1. Toggle folder expansion
     if (type === 'folder' || type === 'root' || type === 'dir') {
       setExpandedFolderIds(prev => {
         const next = new Set(prev);
-        if (next.has(node.id)) next.delete(node.id);
-        else next.add(node.id);
+        if (next.has(node.id)) {
+          next.delete(node.id);
+        } else {
+          next.add(node.id);
+        }
         return next;
       });
+      
+      // Auto fitview after toggling folder if desired
+      setTimeout(() => {
+        fitView({ padding: 0.2, duration: 500 });
+      }, 50);
     }
-    // 2. Call the parent's double click handler (if provided)
+    // 2. Call the parent's single click handler
+    if (onNodeClick) {
+      onNodeClick(event, node);
+    }
+  }, [onNodeClick, fitView, setExpandedFolderIds]);
+
+  // Handle double-clicking a node
+  const handleNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
     if (onNodeDoubleClick) {
       onNodeDoubleClick(event, node);
     }
@@ -374,6 +391,7 @@ export function GraphCanvas({
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onSelectionChange={onSelectionChange}
+        onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
@@ -427,10 +445,10 @@ export function GraphCanvas({
           }
         }}
         onViewDetails={() => {
-          if (contextMenu.nodeId && onNodeDoubleClick) {
+          if (contextMenu.nodeId && onNodeClick) {
             const target = nodes.find(n => n.id === contextMenu.nodeId);
             if (target) {
-              onNodeDoubleClick({} as React.MouseEvent, target);
+              onNodeClick({} as React.MouseEvent, target);
             }
           }
         }}

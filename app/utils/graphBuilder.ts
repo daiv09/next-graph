@@ -4,20 +4,34 @@ import dagre from 'dagre';
 import type { GlassNodeData } from '../types';
 import type { RepoNode, RepoEdge, RepoGraphPayload, ApiResponse } from '../types';
 
-// ── Dagre layout ───────────────────────────────────────────────────────────
-
 const NODE_W = 180;
 const NODE_H = 72;
 
 export function applyDagreLayout(nodes: Node[], edges: Edge[], dir: 'TB' | 'LR' = 'TB'): Node[] {
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: dir, ranksep: 80, nodesep: 40 });
+  g.setGraph({ 
+    rankdir: dir, 
+    // ranksep: The vertical distance between ranks. 100px is usually better than 80px.
+    ranksep: 100, 
+    // nodesep: The horizontal distance between nodes in the same rank. 
+    // Tightening this to 40px keeps the graph compact.
+    nodesep: 40,
+    // Add these for a more balanced "tree" look:
+    edgesep: 10,
+    ranker: 'tight-tree' // This is the secret sauce for preventing "flat" layouts
+  });
+  
   g.setDefaultEdgeLabel(() => ({}));
+  
   nodes.forEach(n => g.setNode(n.id, { width: NODE_W, height: NODE_H }));
   edges.forEach(e => g.setEdge(e.source, e.target));
+  
   dagre.layout(g);
+  
   return nodes.map(n => {
     const p = g.node(n.id);
+    // Ensure we handle nodes that dagre might not have positioned
+    if (!p) return n; 
     return { ...n, position: { x: p.x - NODE_W / 2, y: p.y - NODE_H / 2 } };
   });
 }

@@ -91,11 +91,20 @@ function RepoGraphInner() {
     }
   }, []); // Run once on mount
 
+  // In RepoGraphInner component
+  const handleNodeClick = useCallback((_evt: React.MouseEvent, node: Node) => {
+    // Single click: Select the node (which triggers ChatPanel expansion via selectedNode)
+    setSelectedNode(node);
+  }, []);
+
+  // 2. Double click: Selects the node AND triggers the Chat Panel
+  // We need a ref to access the ChatPanel's "open" function
+  const chatPanelRef = useRef<{ toggleChat: (open: boolean) => void }>(null);
+
   const handleNodeDoubleClick = useCallback((_evt: React.MouseEvent, node: Node) => {
-    const nodeType = node.data?.nodeType || node.type;
-    if (nodeType === 'file' || nodeType === 'dependency') {
-      setPreviewNode(node);
-    }
+    setSelectedNode(node);
+    // Force the Chat Panel to open
+    chatPanelRef.current?.toggleChat(true);
   }, []);
 
   const handleSearch = useCallback(async (url: string) => {
@@ -153,48 +162,53 @@ function RepoGraphInner() {
   }, [setRepoUrl]);
 
   // ── Filtering ──────────────────────────────────────────────────────────────
-  const filteredNodes = useMemo(() => {
-    const directMatches = new Set<string>();
-    flowData.nodes.forEach(node => {
+  // ── REFACTORED FILTERING ──────────────────────────────────────────────────
+  // We compute visibility logic once and apply it to the nodes
+  const processedGraph = useMemo(() => {
+    const isNodeVisible = (node: Node) => {
       const d = node.data as GlassNodeData;
       const label = (d?.label ?? '').toLowerCase();
       const searchMatch = filters.search === '' || label.includes(filters.search.toLowerCase());
       const type = node.type || d?.nodeType;
+
       let typeMatch = true;
       if (type === 'folder') typeMatch = filters.showFolders;
       if (type === 'file') typeMatch = filters.showFiles;
       if (type === 'dependency') typeMatch = filters.showDependencies;
+
       let sizeMatch = true;
       if (filters.minSizeKb > 0 && (type === 'file' || type === 'dependency')) {
-        const size = (d?.size ?? 0) / 1024;
-        sizeMatch = size >= filters.minSizeKb;
+        sizeMatch = (d?.size ?? 0) / 1024 >= filters.minSizeKb;
       }
-      if (type === 'root' || (searchMatch && typeMatch && sizeMatch)) {
-        directMatches.add(node.id);
-      }
-    });
-    const keptIds = new Set<string>(directMatches);
-    const parentMap: Record<string, string> = {};
-    flowData.edges.forEach(edge => { parentMap[edge.target] = edge.source; });
-    directMatches.forEach(matchId => {
-      let current = matchId;
-      while (parentMap[current]) {
-        const parentId = parentMap[current];
-        if (keptIds.has(parentId)) break;
-        keptIds.add(parentId);
-        current = parentId;
-      }
-    });
-    return flowData.nodes.filter(node => keptIds.has(node.id));
-  }, [flowData.nodes, flowData.edges, filters]);
 
-  const filteredEdges = useMemo(() => {
-    const keptNodeIds = new Set(filteredNodes.map(n => n.id));
-    return flowData.edges.filter(edge => keptNodeIds.has(edge.source) && keptNodeIds.has(edge.target));
-  }, [flowData.edges, filteredNodes]);
+      return type === 'root' || (searchMatch && typeMatch && sizeMatch);
+    };
 
-  const displayNodes = filteredNodes.length;
-  const displayEdges = filteredEdges.length;
+    // 1. Identify which nodes are explicitly visible
+    const visibleNodeIds = new Set(
+      flowData.nodes.filter(isNodeVisible).map(n => n.id)
+    );
+
+    // 2. Mark nodes as hidden or visible
+    const nodes = flowData.nodes.map(node => ({
+      ...node,
+      hidden: !visibleNodeIds.has(node.id)
+    }));
+
+    // 3. Edges are hidden if either source OR target is hidden
+    const edges = flowData.edges.map(edge => ({
+      ...edge,
+      hidden: !visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target)
+    }));
+
+    return { nodes, edges };
+  }, [flowData, filters]);
+
+  // Use these in your GraphCanvas
+  const { nodes: displayNodes, edges: displayEdges } = processedGraph;
+
+  const visibleNodesCount = useMemo(() => processedGraph.nodes.filter(n => !n.hidden).length, [processedGraph]);
+  const visibleEdgesCount = useMemo(() => processedGraph.edges.filter(e => !e.hidden).length, [processedGraph]);
 
   const handleChatSendMessage = useCallback(async (text: string) => {
     const res = await fetch('http://localhost:8000/chat', {
@@ -217,23 +231,14 @@ function RepoGraphInner() {
 
   return (
     <>
-      <title>next-graph — GitHub Structure Visualizer</title>
-      <meta name="description" content="Visualize any GitHub repository as a beautiful hierarchical node graph." />
-      <main className="relative flex flex-col w-full h-screen overflow-hidden bg-[#121212]">
+      <main className="relative flex flex-col w-screen h-screen overflow-hidden bg-[#121212] font-sans">
 
-        {/* Subtle Dot Pattern Overlay */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 z-0 pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
-          }}
-        />
+        {/* Background Pattern */}
+        <div className="absolute inset-0 z-0 opacity-30 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
 
-        {/* Top controls */}
-        <div className="absolute top-5 left-1/2 -translate-x-1/2 z-20 w-full max-w-2xl px-4 flex flex-col items-center gap-3 pointer-events-none">
-          <div className="w-full pointer-events-auto">
+        {/* --- TOP LAYER: Search & Filters --- */}
+        <header className="absolute top-0 left-0 w-full z-30 p-4 flex justify-center pointer-events-none">
+          <div className="w-full max-w-2xl pointer-events-auto flex flex-col gap-2">
             <SearchBar
               status={fetchStatus}
               errorMessage={errorMessage}
@@ -241,170 +246,67 @@ function RepoGraphInner() {
               isFilterOpen={isFilterOpen}
               onToggleFilter={() => setIsFilterOpen(!isFilterOpen)}
             />
+            <AnimatePresence>
+              {isFilterOpen && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                  <FilterBar filters={filters} onChange={setFilters} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-          <AnimatePresence>
-            {isFilterOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                transition={{ duration: 0.2, ease: 'easeInOut' }}
-                className="w-full pointer-events-auto"
-              >
-                <FilterBar filters={filters} onChange={setFilters} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Top Right Action Buttons (Export & Share & Timeline & Analytics) */}
-        {fetchStatus === 'success' && (
-          <div className="absolute top-20 right-4 z-30 flex items-center gap-3">
-            <ExportMenu projectName={displayLabel} />
-            <ShareButton repoUrl={currentRepoUrl} filters={filters} />
-            <motion.button
-              id="toggle-timeline-btn"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              onClick={() => setShowTimeline(v => !v)}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 12,
-                border: '1.5px solid rgba(167,139,250,0.5)',
-                background: showTimeline ? 'rgba(109,40,217,0.45)' : 'rgba(255,255,255,0.08)',
-                color: showTimeline ? '#e9d5ff' : 'rgba(255,255,255,0.7)',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-                backdropFilter: 'blur(12px)',
-                transition: 'background 0.2s, color 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-              title="Show / hide commit timeline"
-            >
-              🎬 Timeline
-            </motion.button>
-
-            {meta?.analytics && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                onClick={() => setIsAnalyticsPanelOpen(!isAnalyticsPanelOpen)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: 12,
-                  border: '1.5px solid rgba(14,165,233,0.5)',
-                  background: isAnalyticsPanelOpen ? 'rgba(14,165,233,0.45)' : 'rgba(255,255,255,0.08)',
-                  color: isAnalyticsPanelOpen ? '#bae6fd' : 'rgba(255,255,255,0.7)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(12px)',
-                  transition: 'background 0.2s, color 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-                title="Show / hide analytics"
-              >
-                📊 Analytics
-              </motion.button>
-            )}
-          </div>
-        )}
-
-        {/* Canvas */}
-        <motion.div
-          key={graphKey}
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 100, damping: 15, delay: 0.15 }}
-          className="relative z-10 flex-1 w-full h-full"
-          style={{ paddingBottom: showTimeline ? 90 : 0, transition: 'padding-bottom 0.3s' }}
-        >
-          <AnimatePresence>
-            {fetchStatus === 'loading' && <LoadingOverlay />}
-          </AnimatePresence>
-          <GraphCanvas
-            key={graphKey}
-            nodes={filteredNodes}
-            edges={filteredEdges}
-            nodeTypes={nodeTypes}
-            onSelectedNodeChange={setSelectedNode}
-            onNodeDoubleClick={handleNodeDoubleClick}
-          />
-          <SpotlightSearch />
-          <TourPanel />
-        </motion.div>
-
-        {/* Commit Timeline — pinned to bottom above footer */}
-        <AnimatePresence>
-          {showTimeline && (
-            <motion.div
-              key="timeline"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 30 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
-              style={{
-                position: 'absolute',
-                bottom: 56,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 25,
-                width: 'calc(100% - 48px)',
-                maxWidth: 900,
-              }}
-            >
-              <CommitTimeline repoUrl={currentRepoUrl} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Analytics Panel */}
-        <AnimatePresence>
-          {isAnalyticsPanelOpen && meta?.analytics && (
-            <AnalyticsPanel analytics={meta.analytics} onClose={() => setIsAnalyticsPanelOpen(false)} />
-          )}
-        </AnimatePresence>
-
-        {/* Footer */}
-        <motion.footer
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.9, duration: 0.5 }}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 rounded-full bg-white/8 backdrop-blur-2xl border border-white/15 shadow-[0_4px_20px_rgba(0,0,0,0.4)]"
-          aria-label="Graph statistics"
-        >
-          <span className="text-[11px] text-white/50"><span className="text-white/80 font-semibold">{displayNodes}</span> nodes</span>
-          <span className="w-px h-3 bg-white/20" aria-hidden="true" />
-          <span className="text-[11px] text-white/50"><span className="text-white/80 font-semibold">{displayEdges}</span> edges</span>
-          <span className="w-px h-3 bg-white/20" aria-hidden="true" />
-          <span className="text-[11px] text-white/40">{displayLabel}</span>
-          {meta?.truncated && (
-            <>
-              <span className="w-px h-3 bg-white/20" aria-hidden="true" />
-              <span className="text-[11px] text-amber-400/70">⚠ truncated</span>
-            </>
-          )}
-          {meta?.stars !== undefined && meta.stars > 0 && (
-            <>
-              <span className="w-px h-3 bg-white/20" aria-hidden="true" />
-              <span className="text-[11px] text-white/40">⭐ {meta.stars.toLocaleString()}</span>
-            </>
-          )}
-        </motion.footer>
+        </header>
 
         <ChatPanel
+          ref={chatPanelRef}
           repoName={displayLabel}
-          nodesCount={displayNodes}
-          edgesCount={displayEdges}
+          nodesCount={visibleNodesCount}
+          edgesCount={visibleEdgesCount}
           selectedNode={selectedNode}
           onSendMessage={handleChatSendMessage}
           onViewCode={node => setPreviewNode(node)}
         />
+
+        {/* --- SIDE LAYER: Floating Action Buttons --- */}
+        {fetchStatus === 'success' && (
+          <aside className="absolute top-20 right-4 z-30 flex flex-col gap-2">
+            <ExportMenu projectName={displayLabel} />
+            <ShareButton repoUrl={currentRepoUrl} filters={filters} />
+            <button onClick={() => setShowTimeline(!showTimeline)} className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition">🎬 Timeline</button>
+            {meta?.analytics && <button onClick={() => setIsAnalyticsPanelOpen(!isAnalyticsPanelOpen)} className="p-2 bg-white/10 rounded-lg">📊 Analytics</button>}
+          </aside>
+        )}
+
+        {/* --- CENTER LAYER: The Graph Canvas --- */}
+        <section className="flex-1 w-full h-full relative z-10">
+          <GraphCanvas
+            nodes={processedGraph.nodes}
+            edges={processedGraph.edges}
+            nodeTypes={nodeTypes}
+            onSelectedNodeChange={setSelectedNode}
+            onNodeClick={handleNodeClick}
+            onNodeDoubleClick={handleNodeDoubleClick}
+          />
+          {/* Spotlight Search Overlay */}
+          <SpotlightSearch />
+
+          <TourPanel />
+          {/* Tour Overlay */}
+          {fetchStatus === 'loading' && <LoadingOverlay />}
+        </section>
+
+
+        {/* --- BOTTOM LAYER: Footer & Panels --- */}
+        <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 px-6 py-3 rounded-full bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl">
+          <div className="flex items-center gap-2 text-[11px] text-white/60">
+            <span className="text-white font-medium">{visibleNodesCount} nodes</span>
+            <span className="opacity-20">|</span>
+            <span className="text-white font-medium">{visibleEdgesCount} edges</span>
+          </div>
+          <div className="text-[11px] text-white/30 truncate max-w-[120px]">{meta?.repo || "Ready"}</div>
+        </footer>
+
+        <AnimatePresence>{showTimeline && <CommitTimeline repoUrl={currentRepoUrl} />}</AnimatePresence>
+        <AnimatePresence>{isAnalyticsPanelOpen && <AnalyticsPanel analytics={meta.analytics} onClose={() => setIsAnalyticsPanelOpen(false)} />}</AnimatePresence>
 
         <AnimatePresence>
           {previewNode && (() => {

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { type Node } from '@xyflow/react';
+import { useImperativeHandle, forwardRef } from 'react';
 
 export interface ChatMessage {
   id: string;
@@ -20,14 +21,14 @@ interface ChatPanelProps {
   onViewCode?: (node: Node) => void;
 }
 
-export function ChatPanel({
+export const ChatPanel = forwardRef<{ toggleChat: (open: boolean) => void }, ChatPanelProps>(({
   repoName,
   nodesCount,
   edgesCount,
   selectedNode,
   onSendMessage,
   onViewCode,
-}: ChatPanelProps) {
+}, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -49,12 +50,9 @@ export function ChatPanel({
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // Expand panel automatically when a node is selected to draw user attention
-  useEffect(() => {
-    if (selectedNode) {
-      setIsOpen(true);
-    }
-  }, [selectedNode]);
+  useImperativeHandle(ref, () => ({
+    toggleChat: (open: boolean) => setIsOpen(open)
+  }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,4 +245,4 @@ export function ChatPanel({
       </AnimatePresence>
     </>
   );
-}
+});
