@@ -291,6 +291,13 @@ export default function SpatialBrowser3D({
         <directionalLight position={[-50, 50, 50]} intensity={0.8} />
         <Stars radius={120} depth={50} count={3500} factor={4} saturation={0} fade speed={1.2} />
 
+        <EffectComposer>
+          <Bloom luminanceThreshold={0.2} mipmapBlur intensity={1.5} />
+          <Vignette eskil={false} offset={0.1} darkness={1.1} />
+        </EffectComposer>
+
+        <gridHelper args={[200, 20, '#1e293b', '#0f172a']} position={[0, -50, 0]} />
+
         <NodesRenderer
           nodes={activeNodes}
           onHover={handleHover}
