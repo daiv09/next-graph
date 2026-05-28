@@ -15,7 +15,6 @@ import {
   useEdgesState,
   MiniMap,
 } from '@xyflow/react';
-import { useCommitContext } from '../context/CommitContext';
 import { useTimelineAnimation } from '../hooks/useTimelineAnimation';
 import { applyDagreLayout } from '../utils/graphBuilder';
 import { useAnalyticsContext } from '../context/AnalyticsContext';
@@ -24,6 +23,7 @@ import { useAnnotations } from '../hooks/useAnnotations';
 import { useCommandPaletteContext } from '../context/CommandPaletteContext';
 import { useTour } from '../context/TourContext';
 import type { ContextMenuState } from '../types';
+import { getHeatmapColor } from '../utils/heatmap';
 
 interface GraphCanvasProps {
   nodes: Node[];
@@ -308,6 +308,7 @@ export function GraphCanvas({
          },
          style: {
            ...n.style,
+            ...((n.data as any)?.isHeatmapMode ? ((type === 'file' || type === 'dependency') ? { backgroundColor: getHeatmapColor((n.data as any)?.sizeFactor ?? 0), borderColor: getHeatmapColor((n.data as any)?.sizeFactor ?? 0) } : { backgroundColor: 'rgba(255, 255, 255, 0.02)', borderColor: 'rgba(255, 255, 255, 0.05)' }) : {}),
            transition: 'all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)', // Spring-like layout animation
            opacity: 1,
          }

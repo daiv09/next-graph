@@ -81,6 +81,10 @@ export type GlassNodeData = {
   isCollapsed?: boolean;
   isHighlighted?: boolean;
   isDimmed?: boolean;
+  isHeatmapMode?: boolean;
+  heatmapColor?: string;
+  heatmapScale?: number;
+  sizeFactor?: number;
 };
 
 export interface Annotation {

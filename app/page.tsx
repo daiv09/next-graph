@@ -29,6 +29,8 @@ import { decodeShareState } from './utils/shareState';
 import { ShareButton } from './components/ShareButton';
 import { ExportMenu } from './components/ExportMenu';
 import { useExportShortcuts } from './hooks/useExportShortcuts';
+import { calculateHeatmapStyles } from './utils/heatmap';
+import { HeatmapLegend } from './components/HeatmapLegend';
 
 // ── Node Types ────────────────────────────────────────────────────────────────
 const nodeTypes: NodeTypes = { glass: GlassNode, annotation: AnnotationNode };
@@ -47,6 +49,7 @@ function RepoGraphInner() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [isHeatmapMode, setIsHeatmapMode] = useState(false);
   const [currentRepoUrl, setCurrentRepoUrl] = useState('');
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -165,6 +168,23 @@ function RepoGraphInner() {
   // ── REFACTORED FILTERING ──────────────────────────────────────────────────
   // We compute visibility logic once and apply it to the nodes
   const processedGraph = useMemo(() => {
+    // 1. Calculate min/max sizes for heatmap
+    let minSize = Infinity;
+    let maxSize = -Infinity;
+    if (isHeatmapMode) {
+      flowData.nodes.forEach(node => {
+        const d = node.data as GlassNodeData;
+        const type = node.type || d?.nodeType;
+        if (type === 'file' || type === 'dependency') {
+          const size = d?.size || 0;
+          if (size > 0 && size < minSize) minSize = size;
+          if (size > maxSize) maxSize = size;
+        }
+      });
+      if (minSize === Infinity) minSize = 0;
+      if (maxSize === -Infinity) maxSize = 0;
+    }
+
     const isNodeVisible = (node: Node) => {
       const d = node.data as GlassNodeData;
       const label = (d?.label ?? '').toLowerCase();
@@ -184,25 +204,45 @@ function RepoGraphInner() {
       return type === 'root' || (searchMatch && typeMatch && sizeMatch);
     };
 
-    // 1. Identify which nodes are explicitly visible
+    // 2. Identify which nodes are explicitly visible
     const visibleNodeIds = new Set(
       flowData.nodes.filter(isNodeVisible).map(n => n.id)
     );
 
-    // 2. Mark nodes as hidden or visible
-    const nodes = flowData.nodes.map(node => ({
-      ...node,
-      hidden: !visibleNodeIds.has(node.id)
-    }));
+    // 3. Mark nodes as hidden or visible, and inject heatmap props
+    const nodes = flowData.nodes.map(node => {
+      const d = node.data as GlassNodeData;
+      const type = node.type || d?.nodeType;
+      
+      let heatmapProps: { isHeatmapMode: boolean; heatmapColor?: string; heatmapScale?: number } = { isHeatmapMode: false, heatmapColor: undefined, heatmapScale: undefined };
+      if (isHeatmapMode) {
+        if (type === 'file' || type === 'dependency') {
+          const { scale, color } = calculateHeatmapStyles(d.size, minSize, maxSize);
+          heatmapProps = { isHeatmapMode: true, heatmapScale: scale, heatmapColor: color };
+        } else {
+          // Folders stay neutral in heatmap mode
+          heatmapProps = { isHeatmapMode: true, heatmapScale: 1, heatmapColor: 'rgba(255,255,255,0.02)' };
+        }
+      }
 
-    // 3. Edges are hidden if either source OR target is hidden
+      return {
+        ...node,
+        hidden: !visibleNodeIds.has(node.id),
+        data: {
+          ...d,
+          ...heatmapProps
+        }
+      };
+    });
+
+    // 4. Edges are hidden if either source OR target is hidden
     const edges = flowData.edges.map(edge => ({
       ...edge,
       hidden: !visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target)
     }));
 
     return { nodes, edges };
-  }, [flowData, filters]);
+  }, [flowData, filters, isHeatmapMode]);
 
   // Use these in your GraphCanvas
   const { nodes: displayNodes, edges: displayEdges } = processedGraph;
@@ -273,6 +313,7 @@ function RepoGraphInner() {
             <ShareButton repoUrl={currentRepoUrl} filters={filters} />
             <button onClick={() => setShowTimeline(!showTimeline)} className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition">🎬 Timeline</button>
             {meta?.analytics && <button onClick={() => setIsAnalyticsPanelOpen(!isAnalyticsPanelOpen)} className="p-2 bg-white/10 rounded-lg">📊 Analytics</button>}
+            <button onClick={() => setIsHeatmapMode(!isHeatmapMode)} className={`p-2 rounded-lg transition ${isHeatmapMode ? 'bg-red-500/20 text-red-200 border border-red-500/30' : 'bg-white/10 hover:bg-white/20 text-white'}`}>🔥 Heatmap</button>
           </aside>
         )}
 
@@ -307,6 +348,7 @@ function RepoGraphInner() {
 
         <AnimatePresence>{showTimeline && <CommitTimeline repoUrl={currentRepoUrl} />}</AnimatePresence>
         <AnimatePresence>{isAnalyticsPanelOpen && <AnalyticsPanel analytics={meta.analytics} onClose={() => setIsAnalyticsPanelOpen(false)} />}</AnimatePresence>
+        <AnimatePresence>{isHeatmapMode && <HeatmapLegend />}</AnimatePresence>
 
         <AnimatePresence>
           {previewNode && (() => {

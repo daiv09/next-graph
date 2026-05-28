@@ -60,7 +60,7 @@ const nodeVariants = {
   initial_hidden: { opacity: 0, scale: 0.75 },
 };
 
-export const GlassNode = memo(({ data }: { data: GlassNodeData }) => {
+export const GlassNode = memo(({ data, style }: { data: GlassNodeData; style?: React.CSSProperties }) => {
   const isDirectory = data.nodeType === 'dir' || data.nodeType === 'folder' || data.nodeType === 'root';
   const name = data.label;
   const animState: AnimState = data.animState ?? 'visible';
@@ -91,10 +91,10 @@ export const GlassNode = memo(({ data }: { data: GlassNodeData }) => {
         ...nodeVariants[animState],
         opacity: data.isDimmed ? 0.2 : nodeVariants[animState].opacity,
         scale: data.isHighlighted ? 1.05 : nodeVariants[animState].scale,
-      }}
+      } as any}
       style={{
         padding: '8px 12px',
-        background:
+        background: style?.backgroundColor ||
           animState === 'entering'
             ? 'rgba(74,222,128,0.08)'
             : animState === 'modified'
@@ -104,11 +104,11 @@ export const GlassNode = memo(({ data }: { data: GlassNodeData }) => {
         WebkitBackdropFilter: 'blur(20px)',
         border: data.isHighlighted 
           ? '2px solid rgba(14,165,233,1)' 
-          : `1.5px solid ${data.isDimmed ? 'rgba(255,255,255,0.02)' : stateStyle.border}`,
+          : style?.borderColor ? `1.5px solid ${style.borderColor}` : `1.5px solid ${data.isDimmed ? 'rgba(255,255,255,0.02)' : stateStyle.border}`,
         borderRadius: 14,
         boxShadow: data.isHighlighted 
           ? '0 0 20px 5px rgba(14,165,233,0.6), 0 8px 32px rgba(0,0,0,0.5)'
-          : (data.isDimmed ? 'none' : stateStyle.glow),
+          : style?.borderColor ? `0 0 15px 2px ${style.borderColor}, 0 8px 32px rgba(0,0,0,0.5)` : (data.isDimmed ? 'none' : stateStyle.glow),
         display: 'flex',
         alignItems: 'center',
         gap: 8,

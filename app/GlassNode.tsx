@@ -38,7 +38,7 @@ const getAccent = (kind: NodeKind): string => {
   return 'from-white/10 to-white/5 border-white/20';
 };
 
-const GlassNodeComponent = ({ data, selected }: NodeProps<GlassNodeType>) => {
+const GlassNodeComponent = ({ data, selected, style }: NodeProps<GlassNodeType> & { style?: React.CSSProperties }) => {
   const { label, nodeType, language, size, description, depth = 0 } = data;
 
   return (
@@ -60,7 +60,12 @@ const GlassNodeComponent = ({ data, selected }: NodeProps<GlassNodeType>) => {
           ? 'ring-2 ring-white/50 shadow-glass-glow'
           : 'hover:shadow-glass-depth-hover hover:border-white/30',
       ].join(' ')}
-      style={{ width: 180, minHeight: 72 }}
+      style={{
+        width: 180,
+        minHeight: 72,
+        backgroundColor: style?.backgroundColor,
+        borderColor: style?.borderColor,
+      }}
     >
       <Handle
         type="target"

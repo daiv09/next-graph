@@ -36,10 +36,11 @@ export default function FilePreviewPanel({
   const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext);
   const isPdf = ext === 'pdf';
   const isMarkdown = ext === 'md';
-  const isPreviewable = isImage || isPdf || isMarkdown;
+  const isVideo = ['mp4', 'webm', 'mov'].includes(ext);
+  const isPreviewable = isImage || isPdf || isMarkdown || isVideo;
 
-  // If it's an image or PDF, we might want to default to the preview tab instead of code
-  const defaultTab = isImage || isPdf ? 'preview' : 'code';
+  // If it's an image, PDF, or video, we might want to default to the preview tab instead of code
+  const defaultTab = isImage || isPdf || isVideo ? 'preview' : 'code';
 
   const [content, setContent] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<FileMetrics | null>(null);
@@ -56,9 +57,9 @@ export default function FilePreviewPanel({
   };
 
   useEffect(() => {
-    // Skip backend fetch entirely if we are just looking at an image or PDF
-    if (isImage || isPdf) {
-      setContent('Binary file. View in Preview tab.');
+    // Skip backend fetch entirely if we are just looking at an image, PDF, or video
+    if (isImage || isPdf || isVideo) {
+      setContent('Binary/Media file. View in Preview tab.');
       return;
     }
 
@@ -94,7 +95,7 @@ export default function FilePreviewPanel({
 
     fetchContent();
     return () => { active = false; };
-  }, [repoUrl, path, isImage, isPdf]);
+  }, [repoUrl, path, isImage, isPdf, isVideo]);
 
   const formatBytes = (bytes?: number) => {
     if (bytes === undefined) return '';
@@ -170,16 +171,20 @@ export default function FilePreviewPanel({
 
       {/* Tabs Selector */}
       <div className="px-6 py-3 border-b border-white/5 bg-white/[0.01] flex items-center justify-between">
+        {/* --- TAB SELECTOR --- */}
         <div className="flex bg-white/5 border border-white/10 rounded-lg p-0.5 gap-1 self-start">
-          <button
-            onClick={() => setActiveTab('code')}
-            className={`px-3 py-1 rounded-md text-xs font-medium cursor-pointer transition-all ${activeTab === 'code' ? 'bg-violet-600/70 text-white shadow-md' : 'text-white/60 hover:text-white/95'
-              }`}
-          >
-            Code View
-          </button>
+          {/* ONLY SHOW CODE TAB IF NOT BINARY/MEDIA */}
+          {!isPreviewable && (
+            <button
+              onClick={() => setActiveTab('code')}
+              className={`px-3 py-1 rounded-md text-xs font-medium cursor-pointer transition-all ${activeTab === 'code' ? 'bg-violet-600/70 text-white shadow-md' : 'text-white/60 hover:text-white/95'
+                }`}
+            >
+              Code View
+            </button>
+          )}
 
-          {/* Conditional Preview Tab */}
+          {/* Preview Tab */}
           {isPreviewable && (
             <button
               onClick={() => setActiveTab('preview')}
@@ -190,13 +195,16 @@ export default function FilePreviewPanel({
             </button>
           )}
 
-          <button
-            onClick={() => setActiveTab('metrics')}
-            className={`px-3 py-1 rounded-md text-xs font-medium cursor-pointer transition-all ${activeTab === 'metrics' ? 'bg-violet-600/70 text-white shadow-md' : 'text-white/60 hover:text-white/95'
-              }`}
-          >
-            Complexity Metrics
-          </button>
+          {/* Metrics Tab (Keep visible only if metrics exist) */}
+          {!isPreviewable && (
+            <button
+              onClick={() => setActiveTab('metrics')}
+              className={`px-3 py-1 rounded-md text-xs font-medium cursor-pointer transition-all ${activeTab === 'metrics' ? 'bg-violet-600/70 text-white shadow-md' : 'text-white/60 hover:text-white/95'
+                }`}
+            >
+              Complexity Metrics
+            </button>
+          )}
         </div>
 
         {metrics && activeTab !== 'preview' && (
@@ -236,6 +244,14 @@ export default function FilePreviewPanel({
                 className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-white/10"
               />
             )}
+            {isVideo && (
+              <video
+                src={getRawAssetUrl()}
+                controls
+                preload="metadata"
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-white/10"
+              />
+            )}
             {isPdf && (
               <iframe
                 src={getRawAssetUrl()}
@@ -252,7 +268,7 @@ export default function FilePreviewPanel({
         )}
 
         {/* --- CODE TAB --- */}
-        {!loading && !error && activeTab === 'code' && (
+        {!isPreviewable && !loading && !error && activeTab === 'code' && (
           <div className="h-full w-full">
             <Editor
               height="100%"
@@ -275,7 +291,7 @@ export default function FilePreviewPanel({
         )}
 
         {/* --- METRICS TAB --- */}
-        {activeTab === 'metrics' && (
+        {!isPreviewable && activeTab === 'metrics' && (
           <div className="h-full overflow-y-auto p-6">
             {metrics ? (
               <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">

@@ -45,19 +45,28 @@ export function buildFromPlaceholder(pl: RepoGraphPayload): { nodes: Node[]; edg
     type: 'default',
     style: { stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1.5 },
   }));
-  const rfNodes: Node[] = pl.nodes.map(n => ({
-    id: n.id,
-    type: 'glass', // enforce glass node for all placeholder nodes
-    position: { x: 0, y: 0 },
-    data: {
-      label: n.label,
-      nodeType: n.type,
-      path: n.path,
-      language: n.language,
-      size: n.size,
-      description: n.description,
-    } satisfies GlassNodeData,
-  }));
+  
+  const sizes = pl.nodes.map(n => n.size || 0).filter(s => s > 0);
+  const maxSize = sizes.length > 0 ? Math.max(...sizes) : 1;
+
+  const rfNodes: Node[] = pl.nodes.map(n => {
+    const size = n.size || 0;
+    const sizeFactor = size > 0 && maxSize > 1 ? Math.log(size) / Math.log(maxSize) : 0;
+    return {
+      id: n.id,
+      type: 'glass', // enforce glass node for all placeholder nodes
+      position: { x: 0, y: 0 },
+      data: {
+        label: n.label,
+        nodeType: n.type,
+        path: n.path,
+        language: n.language,
+        size: n.size,
+        description: n.description,
+        sizeFactor,
+      } satisfies GlassNodeData,
+    };
+  });
   return { nodes: applyDagreLayout(rfNodes, rfEdges), edges: rfEdges };
 }
 
@@ -70,18 +79,27 @@ export function buildFromApi(api: ApiResponse): { nodes: Node[]; edges: Edge[] }
     type: 'default',
     style: { stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1.5 },
   }));
-  const rfNodes: Node[] = api.nodes.map(n => ({
-    id: n.id,
-    type: 'glass',
-    position: { x: 0, y: 0 },
-    data: {
-      label: n.data.label,
-      nodeType: n.type,
-      path: n.data.path,
-      size: n.data.size,
-      description: n.data.description,
-      created_at: n.data.created_at,
-    } satisfies GlassNodeData,
-  }));
+
+  const sizes = api.nodes.map(n => n.data.size || 0).filter(s => s > 0);
+  const maxSize = sizes.length > 0 ? Math.max(...sizes) : 1;
+
+  const rfNodes: Node[] = api.nodes.map(n => {
+    const size = n.data.size || 0;
+    const sizeFactor = size > 0 && maxSize > 1 ? Math.log(size) / Math.log(maxSize) : 0;
+    return {
+      id: n.id,
+      type: 'glass',
+      position: { x: 0, y: 0 },
+      data: {
+        label: n.data.label,
+        nodeType: n.type,
+        path: n.data.path,
+        size: n.data.size,
+        description: n.data.description,
+        created_at: n.data.created_at,
+        sizeFactor,
+      } satisfies GlassNodeData,
+    };
+  });
   return { nodes: applyDagreLayout(rfNodes, rfEdges), edges: rfEdges };
 }

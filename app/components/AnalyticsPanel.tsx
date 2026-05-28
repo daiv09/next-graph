@@ -64,7 +64,7 @@ export function AnalyticsPanel({ analytics, onClose }: AnalyticsPanelProps) {
                   innerRadius={50} outerRadius={70}
                   paddingAngle={5}
                   dataKey="value"
-                  onClick={(entry) => handleFilterClick('typology', entry.name)}
+                  onClick={(entry) => handleFilterClick('typology', entry.name || '')}
                   cursor="pointer"
                 >
                   {analytics.typology.map((entry, index) => (
@@ -99,13 +99,13 @@ export function AnalyticsPanel({ analytics, onClose }: AnalyticsPanelProps) {
                   cursor={{ strokeDasharray: '3 3' }}
                   contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#fff' }}
                   labelFormatter={() => ''}
-                  formatter={(value: number, name: string, props: any) => [name === 'size' ? `${(value/1024).toFixed(1)} KB` : value, name]}
+                  formatter={(value: any, name: any) => [name === 'size' ? `${(parseFloat(value || 0)/1024).toFixed(1)} KB` : value, name]}
                 />
                 <Scatter
                   name="Files"
                   data={analytics.scatter}
                   fill="#0ea5e9"
-                  onClick={(entry) => handleFilterClick('scatter', entry.path)}
+                  onClick={(entry) => handleFilterClick('scatter', (entry as any).payload?.path || '')}
                   cursor="pointer"
                 >
                   {analytics.scatter.map((entry, index) => (
@@ -136,7 +136,7 @@ export function AnalyticsPanel({ analytics, onClose }: AnalyticsPanelProps) {
                   dataKey="value"
                   fill="#8b5cf6"
                   radius={[4, 4, 0, 0]}
-                  onClick={(entry) => handleFilterClick('sizeBucket', entry.name)}
+                  onClick={(entry) => handleFilterClick('sizeBucket', entry.name || '')}
                   cursor="pointer"
                 >
                   {analytics.sizeDistribution.map((entry, index) => (
@@ -167,7 +167,7 @@ export function AnalyticsPanel({ analytics, onClose }: AnalyticsPanelProps) {
                     stroke="#10b981"
                     fill="#10b981"
                     fillOpacity={0.3}
-                    onClick={(e) => handleFilterClick('radar', e.name)}
+                    onClick={(e: any) => handleFilterClick('radar', e.name || '')}
                     cursor="pointer"
                   />
                   <Radar
@@ -176,7 +176,7 @@ export function AnalyticsPanel({ analytics, onClose }: AnalyticsPanelProps) {
                     stroke="#f43f5e"
                     fill="#f43f5e"
                     fillOpacity={0.3}
-                    onClick={(e) => handleFilterClick('radar', e.name)}
+                    onClick={(e: any) => handleFilterClick('radar', e.name || '')}
                     cursor="pointer"
                   />
                   <Tooltip
@@ -200,12 +200,12 @@ export function AnalyticsPanel({ analytics, onClose }: AnalyticsPanelProps) {
                   dataKey="fileCount"
                   stroke="#fff"
                   fill="#6366f1"
-                  onClick={(entry) => handleFilterClick('treemap', entry.name)}
+                  onClick={(entry) => handleFilterClick('treemap', entry.name || '')}
                   style={{ cursor: 'pointer' }}
                 >
                   <Tooltip
                     contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#fff' }}
-                    formatter={(value: number, name: string, props: any) => [value, 'Files']}
+                    formatter={(value: any) => [value, 'Files']}
                   />
                 </Treemap>
               </ResponsiveContainer>
