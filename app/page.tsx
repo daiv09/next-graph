@@ -17,7 +17,7 @@ import { CommitProvider, useCommitContext } from './context/CommitContext';
 import { AnalyticsProvider, useAnalyticsContext } from './context/AnalyticsContext';
 import { AnalyticsPanel } from './components/AnalyticsPanel';
 import { buildFromPlaceholder, buildFromApi } from './utils/graphBuilder';
-import { PLACEHOLDER } from './utils/constants';
+import { PLACEHOLDER, API_BASE } from './utils/constants';
 import type { Node, Edge, NodeTypes } from '@xyflow/react';
 import type { GlassNodeData, NodeKind, FetchStatus } from './types';
 
@@ -132,7 +132,7 @@ function RepoGraphInner() {
     setErrorMessage('');
 
     try {
-      const res = await fetch('http://localhost:8000/parse-repo', {
+      const res = await fetch(`${API_BASE}/parse-repo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -253,7 +253,7 @@ function RepoGraphInner() {
   const visibleEdgesCount = useMemo(() => processedGraph.edges.filter(e => !e.hidden).length, [processedGraph]);
 
   const handleChatSendMessage = useCallback(async (text: string) => {
-    const res = await fetch('http://localhost:8000/chat', {
+    const res = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -316,7 +316,7 @@ function RepoGraphInner() {
             <button onClick={() => setShowTimeline(!showTimeline)} className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition">🎬 Timeline</button>
             {meta?.analytics && <button onClick={() => setIsAnalyticsPanelOpen(!isAnalyticsPanelOpen)} className="p-2 bg-white/10 rounded-lg">📊 Analytics</button>}
             <button onClick={() => setIsHeatmapMode(!isHeatmapMode)} className={`p-2 rounded-lg transition ${isHeatmapMode ? 'bg-red-500/20 text-red-200 border border-red-500/30' : 'bg-white/10 hover:bg-white/20 text-white'}`}>🔥 Heatmap</button>
-            <button onClick={() => setViewMode(viewMode === '2D' ? '3D' : '2D')} className="p-2 bg-violet-600/80 text-white rounded-lg hover:bg-violet-600 transition font-medium border border-violet-500/20 shadow-md">{viewMode === '2D' ? '🕶️ 3D View' : '🖥️ 2D View'}</button>
+            <button onClick={() => setViewMode(viewMode === '2D' ? '3D' : '2D')} className="p-2 bg-violet-600/80 text-white rounded-lg hover:bg-violet-600 transition font-medium border border-violet-500/20 shadow-md">{viewMode === '2D' ? '3D View' : '2D View'}</button>
           </aside>
         )}
 

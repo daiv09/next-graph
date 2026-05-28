@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useCommitContext, type Commit } from '../context/CommitContext';
+import { API_BASE } from '../utils/constants';
 
 interface UseCommitHistoryReturn {
   loading: boolean;
@@ -25,7 +26,7 @@ export function useCommitHistory(repoUrl: string): UseCommitHistoryReturn {
     setSelectedIndex(0);
 
     const encoded = encodeURIComponent(repoUrl);
-    fetch('http://localhost:8000/commit-files', {
+    fetch(`${API_BASE}/commit-files`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: repoUrl, limit: 100 })

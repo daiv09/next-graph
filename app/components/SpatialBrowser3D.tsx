@@ -2,7 +2,7 @@
 
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Stars, Html } from '@react-three/drei';
+import { OrbitControls, Stars, Html, CatmullRomLine } from '@react-three/drei';
 import * as THREE from 'three';
 import { Node, Edge } from '@xyflow/react';
 import { getHeatmapColor } from '../utils/heatmap';
@@ -189,51 +189,47 @@ function EdgesRenderer({ edges, nodes }: { edges: Edge[]; nodes: Node[] }) {
 
   const getNodeDepth = (node: Node) => {
     const path = (node.data as any)?.path || '';
-    if (!path) return 0;
-    return path.split('/').length;
+    return path ? path.split('/').length : 0;
   };
-
-  const curves = useMemo(() => {
-    return edges
-      .filter((edge) => !edge.hidden)
-      .map((edge) => {
-        const source = nodeMap.get(edge.source);
-        const target = nodeMap.get(edge.target);
-
-        if (source && target && !source.hidden && !target.hidden) {
-          const sPos = new THREE.Vector3(
-            source.position.x * 0.06, -source.position.y * 0.06, -getNodeDepth(source) * 6
-          );
-          const tPos = new THREE.Vector3(
-            target.position.x * 0.06, -target.position.y * 0.06, -getNodeDepth(target) * 6
-          );
-
-          // Create a control point that adds a subtle curve toward the center
-          const midPoint = new THREE.Vector3().addVectors(sPos, tPos).multiplyScalar(0.5);
-          midPoint.z -= 5; // Pull the curve slightly in the Z-axis for depth
-
-          const curve = new THREE.CubicBezierCurve3(sPos, sPos, midPoint, tPos);
-          return curve.getPoints(20); // 20 segments for smoothness
-        }
-        return null;
-      })
-      .filter(Boolean) as THREE.Vector3[][];
-  }, [edges, nodeMap]);
 
   return (
     <>
-      {curves.map((points, i) => (
-        <line key={i}>
-          <bufferGeometry attach="geometry" setFromPoints={points} />
-          <lineBasicMaterial
-            attach="material"
-            color="#a78bfa"
-            transparent
-            opacity={0.15}
-            depthWrite={false}
-          />
-        </line>
-      ))}
+      {edges
+        .filter((edge) => !edge.hidden)
+        .map((edge, i) => {
+          const source = nodeMap.get(edge.source);
+          const target = nodeMap.get(edge.target);
+
+          if (!source || !target || source.hidden || target.hidden) return null;
+
+          const sPos = new THREE.Vector3(
+            source.position.x * 0.06,
+            -source.position.y * 0.06,
+            -getNodeDepth(source) * 6
+          );
+          const tPos = new THREE.Vector3(
+            target.position.x * 0.06,
+            -target.position.y * 0.06,
+            -getNodeDepth(target) * 6
+          );
+
+          // Calculate an organic curve point
+          const midPoint = new THREE.Vector3().addVectors(sPos, tPos).multiplyScalar(0.5);
+          midPoint.z -= 5;
+
+          return (
+            <CatmullRomLine
+              key={edge.id || i}
+              points={[sPos, midPoint, tPos]}
+              color="#a78bfa"
+              lineWidth={1.5}
+              transparent
+              opacity={0.2}
+              curveType="centripetal"
+              tension={0.5}
+            />
+          );
+        })}
     </>
   );
 }

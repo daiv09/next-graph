@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Editor from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
+import { API_BASE } from '../utils/constants';
 
 interface FileMetrics {
   loc: number;
@@ -70,7 +71,7 @@ export default function FilePreviewPanel({
       setContent(null);
       setMetrics(null);
       try {
-        const response = await fetch('http://localhost:8000/file-content', {
+        const response = await fetch(`${API_BASE}/file-content`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ repo_url: repoUrl, path: path }),

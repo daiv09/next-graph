@@ -4,6 +4,7 @@ import { Command } from 'cmdk';
 import { useCommandPaletteContext } from '../context/CommandPaletteContext';
 import { useTour } from '../context/TourContext';
 import { useNodes, useReactFlow, useEdges } from '@xyflow/react';
+import { API_BASE } from '../utils/constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function SpotlightSearch() {
@@ -36,7 +37,7 @@ export function SpotlightSearch() {
 
   const handleStartTour = async () => {
     try {
-      const res = await fetch('http://localhost:8000/generate-tour', {
+      const res = await fetch(`${API_BASE}/generate-tour`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodes, edges }),
