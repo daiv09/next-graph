@@ -371,7 +371,7 @@ function RepoGraphInner() {
                   : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
               }`}
             >
-              🧠 {layoutMode === 'filesystem' ? 'Semantic Layout' : 'Folder Layout'}
+               {layoutMode === 'filesystem' ? 'Semantic Layout' : 'Folder Layout'}
             </button>
             <button onClick={() => setViewMode(viewMode === '2D' ? '3D' : '2D')} className="p-2 bg-violet-600/80 text-white rounded-lg hover:bg-violet-600 transition font-medium border border-violet-500/20 shadow-md">{viewMode === '2D' ? '3D View' : '2D View'}</button>
           </aside>
