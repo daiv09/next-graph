@@ -1,4 +1,7 @@
 # backend/app.py
+from dotenv import load_dotenv
+load_dotenv()
+
 """FastAPI entrypoint for uvicorn.
 We import the FastAPI app defined in main.py and include additional routers.
 """
@@ -19,8 +22,10 @@ from routers import router as main_router
 from backend.routers.commits import router as commits_router
 from backend.routers.file_metadata import router as file_metadata_router
 from backend.routers.commit_detail import router as commit_detail_router
+from backend.routers.topology import router as topology_router
 
 app.include_router(main_router)
 app.include_router(commits_router)
 app.include_router(file_metadata_router)
 app.include_router(commit_detail_router)
+app.include_router(topology_router)

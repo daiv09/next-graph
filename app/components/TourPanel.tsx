@@ -1,10 +1,75 @@
 'use client';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTour } from '../context/TourContext';
 
 export function TourPanel() {
-  const { isActive, tourSteps, currentStepIndex, nextStep, prevStep, exitTour } = useTour();
+  const { 
+    isActive, 
+    tourSteps, 
+    currentStepIndex, 
+    nextStep, 
+    prevStep, 
+    exitTour,
+    setOnStepChange,
+    setSnapshot
+  } = useTour();
+
+  // Register the onStepChange listener to capture graph snapshots using html2canvas
+  useEffect(() => {
+    if (!isActive) return;
+
+    const captureGraphSnapshot = async (stepIndex: number) => {
+      const step = tourSteps[stepIndex];
+      if (!step) return;
+
+      // 1. Wait for 300ms transition delay to allow movements/zoom to settle
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const viewportEl = document.querySelector<HTMLElement>('.react-flow__viewport');
+      if (viewportEl) {
+        try {
+          // Dynamic import of html2canvas for SSR/Next.js compatibility
+          const html2canvas = (await import('html2canvas')).default;
+          
+          // Inject style block to strip backdrop-filter temporarily (html2canvas compatibility)
+          const styleEl = document.createElement('style');
+          styleEl.innerHTML = `
+            .react-flow__node * {
+              backdrop-filter: none !important;
+              -webkit-backdrop-filter: none !important;
+            }
+            .react-flow__node {
+              background-color: rgba(30, 30, 45, 0.98) !important;
+            }
+          `;
+          document.head.appendChild(styleEl);
+
+          try {
+            const canvas = await html2canvas(viewportEl, {
+              backgroundColor: '#121212',
+              logging: false,
+              useCORS: true,
+              allowTaint: true,
+            });
+            const base64Image = canvas.toDataURL('image/png');
+            
+            // 2. Store the resulting Base64 string in snapshots mapping
+            setSnapshot(stepIndex, base64Image);
+          } finally {
+            styleEl.remove();
+          }
+        } catch (err) {
+          console.error('Failed to capture graph snapshot using html2canvas:', err);
+        }
+      }
+    };
+
+    setOnStepChange(captureGraphSnapshot);
+    return () => {
+      setOnStepChange(undefined);
+    };
+  }, [isActive, tourSteps, setOnStepChange, setSnapshot]);
 
   if (!isActive || tourSteps.length === 0) return null;
 

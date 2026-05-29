@@ -70,31 +70,41 @@ function RepoGraphInner() {
 
   // Hydration effect for shared state
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const searchParams = new URLSearchParams(window.location.search);
-      const s = searchParams.get('s');
-      if (s) {
-        const decoded = decodeShareState(s);
-        if (decoded) {
-          if (decoded.repoUrl) {
-            handleSearch(decoded.repoUrl);
-          }
+    const searchParams = new URLSearchParams(window.location.search);
+    const s = searchParams.get('s');
+
+    if (s) {
+      const decoded = decodeShareState(s);
+      if (decoded?.repoUrl) {
+        // 1. Initiate Fetch
+        handleSearch(decoded.repoUrl).then(() => {
+
+          // 2. Apply Filters (Use functional updates for state safety)
           if (decoded.filter) {
-            setIsAnalyticsPanelOpen(true);
-            // activeFilter is managed by AnalyticsContext, but hydration is tricky without its setter
-            // Wait, we don't have setActiveFilter in context? The instruction said:
-            // "If share data exists, it should automatically trigger the parse-repo fetch, apply the filters, and use React Flow's setViewport"
+            try {
+              const parsed = typeof decoded.filter.value === 'string'
+                ? JSON.parse(decoded.filter.value)
+                : decoded.filter.value;
+              setFilters(parsed);
+            } catch (e) { console.error("Filter parse error", e); }
           }
+
+          // 3. Restore Viewport
+          // Important: We wrap in a requestAnimationFrame to ensure 
+          // the nodes have been painted to the DOM by React Flow
           if (decoded.viewport) {
-            // Delay to allow nodes to render
-            setTimeout(() => {
-              setViewport({ x: decoded.viewport!.x, y: decoded.viewport!.y, zoom: decoded.viewport!.zoom });
-            }, 1000);
+            requestAnimationFrame(() => {
+              setViewport({
+                x: decoded.viewport!.x,
+                y: decoded.viewport!.y,
+                zoom: decoded.viewport!.zoom
+              }, { duration: 0 }); // Duration 0 for instant jump to saved view
+            });
           }
-        }
+        });
       }
     }
-  }, []); // Run once on mount
+  }, []);
 
   // In RepoGraphInner component
   const handleNodeClick = useCallback((_evt: React.MouseEvent, node: Node) => {
@@ -311,7 +321,7 @@ function RepoGraphInner() {
         {/* --- SIDE LAYER: Floating Action Buttons --- */}
         {fetchStatus === 'success' && (
           <aside className="absolute top-20 right-4 z-30 flex flex-col gap-2">
-            <ExportMenu projectName={displayLabel} />
+            <ExportMenu projectName={displayLabel} repoUrl={currentRepoUrl} />
             <ShareButton repoUrl={currentRepoUrl} filters={filters} />
             <button onClick={() => setShowTimeline(!showTimeline)} className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition">🎬 Timeline</button>
             {meta?.analytics && <button onClick={() => setIsAnalyticsPanelOpen(!isAnalyticsPanelOpen)} className="p-2 bg-white/10 rounded-lg">📊 Analytics</button>}
@@ -359,7 +369,14 @@ function RepoGraphInner() {
         </footer>
 
         <AnimatePresence>{showTimeline && <CommitTimeline repoUrl={currentRepoUrl} />}</AnimatePresence>
-        <AnimatePresence>{isAnalyticsPanelOpen && <AnalyticsPanel analytics={meta.analytics} onClose={() => setIsAnalyticsPanelOpen(false)} />}</AnimatePresence>
+        <AnimatePresence>
+          {isAnalyticsPanelOpen && meta?.analytics && (
+            <AnalyticsPanel
+              analytics={meta.analytics}
+              onClose={() => setIsAnalyticsPanelOpen(false)}
+            />
+          )}
+        </AnimatePresence>
         <AnimatePresence>{isHeatmapMode && <HeatmapLegend />}</AnimatePresence>
 
         <AnimatePresence>

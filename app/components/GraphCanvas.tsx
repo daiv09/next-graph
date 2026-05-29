@@ -24,6 +24,7 @@ import { useCommandPaletteContext } from '../context/CommandPaletteContext';
 import { useTour } from '../context/TourContext';
 import type { ContextMenuState } from '../types';
 import { getHeatmapColor } from '../utils/heatmap';
+import { toPng } from 'html-to-image';
 
 interface GraphCanvasProps {
   nodes: Node[];
@@ -135,7 +136,7 @@ export function GraphCanvas({
   const { nodeStates } = useTimelineAnimation();
   const { activeFilter } = useAnalyticsContext();
   const { activeItemId } = useCommandPaletteContext();
-  const { isActive: isTourActive, tourSteps, currentStepIndex } = useTour();
+  const { isActive: isTourActive, tourSteps, currentStepIndex, setSlide } = useTour();
   const { annotations, addAnnotation, updateAnnotation, removeAnnotation } = useAnnotations();
 
   const { timelineNodes, timelineEdges } = useMemo(() => {
@@ -366,6 +367,8 @@ export function GraphCanvas({
       }
     }
   }, [isTourActive, currentStepIndex, tourSteps, nodes, fitView]);
+
+
 
   const getNodeColor = useCallback((node: Node) => {
     const type = node.data?.nodeType || node.type;
