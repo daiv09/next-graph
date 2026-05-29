@@ -1,5 +1,6 @@
 # routers.py
 import os
+import json
 import httpx
 from fastapi import APIRouter, HTTPException, status
 from schemas import (
@@ -107,60 +108,87 @@ async def get_file_content(body: FileContentRequest):
 async def chat_about_repo(body: ChatRequest) -> ChatResponse:
     last_user_message = next((m.text for m in reversed(body.messages) if m.sender == "user"), "")
     if not last_user_message:
-        return ChatResponse(text="Hello! How can I help you explore this repository today?")
+        return ChatResponse(text=json.dumps({"path": [], "summary": "Hello! How can I help you explore this repository today?"}))
 
-    msg = last_user_message.lower()
     files = [n for n in body.nodes if n.get("type") in ("file", "dependency") or n.get("data", {}).get("nodeType") in ("file", "dependency")]
-    folders = [n for n in body.nodes if n.get("type") == "folder" or n.get("data", {}).get("nodeType") == "folder"]
-    deps = [n for n in body.nodes if n.get("type") == "dependency" or n.get("data", {}).get("nodeType") == "dependency"]
+    file_paths = []
+    for f in files:
+        path = f.get("data", {}).get("path") or f.get("id")
+        if path:
+            file_paths.append(path)
+    file_paths.sort()
+    file_tree_str = "\n".join(f"- {p}" for p in file_paths)
+
+    groq_api_key = os.getenv("GROQ_API_KEY")
     
-    total_size = sum(n.get("data", {}).get("size") or 0 for n in files)
-    languages: dict[str, int] = {}
-    for n in files:
-        label = n.get("data", {}).get("label") or ""
-        ext = label.split(".")[-1] if "." in label else "unknown"
-        languages[ext] = languages.get(ext, 0) + 1
+    system_prompt = (
+        "You are an expert Senior Developer Mentor specializing in Codebase Navigation.\n"
+        "Your task is to trace the implementation of a specific feature/query within the repository and generate an 'Execution Path'.\n\n"
+        "Input Repo Structure:\n"
+        f"{file_tree_str}\n\n"
+        "Instructions:\n"
+        "1. Identify the entry points, state management, and API calls related to the query/feature.\n"
+        "2. Trace and order the files by the logical flow of data (e.g., UI Event -> Service/API call -> State Update -> Component Re-render).\n"
+        "3. For each file in the path, explain exactly which lines, functions, or roles handle the logic.\n"
+        "4. Provide a 3-sentence high-level summary overview of how this feature functions in this codebase.\n\n"
+        "You MUST respond with a valid JSON object matching this schema:\n"
+        "{\n"
+        '  "path": [\n'
+        '    { "file": "path/to/file", "role": "UI" | "State" | "API" | "Service" | "Other", "explanation": "Brief reasoning of what it does" }\n'
+        '  ],\n'
+        '  "summary": "A 3-sentence high-level overview of how this feature functions in this codebase."\n'
+        "}\n"
+    )
 
-    selected = body.selected_node
-    if selected:
-        label = selected.get("data", {}).get("label") or selected.get("id") or "unknown"
-        node_type = selected.get("data", {}).get("nodeType") or selected.get("type") or "file"
-        path = selected.get("data", {}).get("path") or label
-        size = selected.get("data", {}).get("size")
-        size_str = f" ({size:,} bytes)" if size is not None else ""
+    headers = {
+        "Authorization": f"Bearer {groq_api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"User query: {last_user_message}"}
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.2
+    }
 
-        if any(w in msg for w in ("what", "explain", "role", "tell me", "details", "info", "this")):
-            if node_type == "root":
-                text = f"You are focusing on the repository root: **{label}**."
-            elif node_type == "folder":
-                text = f"You are focusing on the folder **{label}** (path: `{path}`)."
-            elif node_type == "dependency":
-                text = f"This is **{label}** (path: `{path}`), a dependency config file."
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30.0
+            )
+            if resp.status_code == 200:
+                result = resp.json()
+                content = result["choices"][0]["message"]["content"]
+                # Validate JSON structure
+                try:
+                    data = json.loads(content)
+                    if "path" not in data or "summary" not in data:
+                        data = {
+                            "path": [],
+                            "summary": content
+                        }
+                    return ChatResponse(text=json.dumps(data))
+                except Exception:
+                    return ChatResponse(text=json.dumps({
+                        "path": [],
+                        "summary": content
+                    }))
             else:
-                text = f"This is the file **{label}**{size_str} located at `{path}`."
-            return ChatResponse(text=text)
-
-
-    if any(w in msg for w in ("dependency", "package", "module", "library")):
-        dep_list = ", ".join([d.get("data", {}).get("label") or "" for d in deps])
-        text = f"Dependency files: **{dep_list}**." if dep_list else "No dependency files detected."
-    elif any(w in msg for w in ("folder", "directory", "structure")):
-        folder_list = ", ".join([f.get("data", {}).get("label") or "" for f in folders[:10]])
-        text = f"Contains **{len(folders)} folders**. Top folders: **{folder_list}**." + (f" (and {len(folders) - 10} more)." if len(folders) > 10 else "")
-    elif any(w in msg for w in ("size", "big", "kilobyte", "megabyte")):
-        text = f"Total parsed size: **{total_size:,} bytes** (~{total_size / 1024:.1f} KB)."
-    elif any(w in msg for w in ("language", "tech", "stack")):
-        lang_str = ", ".join([f"*.{k} ({v} files)" for k, v in sorted(languages.items(), key=lambda x: x[1], reverse=True)[:5]])
-        text = f"Language breakdown: **{lang_str}**."
-    else:
-        text = (f"Summary of **{body.repo_name}**:\n"
-                f"- **Structure:** {len(folders)} folders, {len(files)} files.\n"
-                f"- **Dependencies:** {len(deps)} configurations.\n"
-                f"- **Total code size:** {total_size:,} bytes.\n"
-                f"- **Primary extensions:** {', '.join(list(languages.keys())[:4])}.\n\n"
-                "Ask me about 'dependencies', 'folders', 'size', or 'languages'!")
-
-    return ChatResponse(text=text)
+                return ChatResponse(text=json.dumps({
+                    "path": [],
+                    "summary": f"Failed to connect to Groq (status {resp.status_code}): {resp.text}"
+                }))
+        except Exception as e:
+            return ChatResponse(text=json.dumps({
+                "path": [],
+                "summary": f"Error communicating with AI service: {str(e)}"
+            }))
 
 import asyncio
 

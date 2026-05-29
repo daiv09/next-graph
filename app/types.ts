@@ -85,6 +85,9 @@ export type GlassNodeData = {
   heatmapColor?: string;
   heatmapScale?: number;
   sizeFactor?: number;
+  semanticPosition?: { x: number; y: number };
+  clusterId?: number;
+  clusterLabel?: string;
 };
 
 export interface Annotation {

@@ -50,6 +50,101 @@ export const ChatPanel = forwardRef<{ toggleChat: (open: boolean) => void }, Cha
     scrollToBottom();
   }, [messages, isLoading]);
 
+  useEffect(() => {
+    // Find the last agent message
+    const lastAgentMsg = [...messages].reverse().find(m => m.sender === 'agent');
+    if (lastAgentMsg) {
+      try {
+        const parsed = JSON.parse(lastAgentMsg.text);
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.path)) {
+          const pathFiles = parsed.path.map((item: any) => item.file);
+          const highlightEvent = new CustomEvent('highlightPath', { detail: { paths: pathFiles } });
+          window.dispatchEvent(highlightEvent);
+          return;
+        }
+      } catch (e) {
+        // Not JSON
+      }
+    }
+    // If no JSON path is active or last message is from user, clear highlights
+    const clearEvent = new CustomEvent('highlightPath', { detail: { paths: [] } });
+    window.dispatchEvent(clearEvent);
+  }, [messages]);
+
+  const renderMessageContent = (msg: ChatMessage) => {
+    if (msg.sender === 'user') {
+      return msg.text.split('**').map((part, idx) =>
+        idx % 2 === 1 ? <strong key={idx} className="font-bold text-white">{part}</strong> : part
+      );
+    }
+
+    try {
+      const parsed = JSON.parse(msg.text);
+      if (parsed && typeof parsed === 'object' && ('summary' in parsed || 'path' in parsed)) {
+        const summary = parsed.summary || '';
+        const path = Array.isArray(parsed.path) ? parsed.path : [];
+
+        return (
+          <div className="flex flex-col gap-3">
+            <div className="text-sm text-white/90 leading-relaxed">
+              {summary.split('**').map((part: string, idx: number) =>
+                idx % 2 === 1 ? <strong key={idx} className="font-bold text-white">{part}</strong> : part
+              )}
+            </div>
+
+            {path.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-2">
+                <div className="text-[10px] uppercase tracking-wider text-violet-300 font-bold">Execution Path</div>
+                <div className="flex flex-col gap-2 relative pl-3 border-l border-white/10">
+                  {path.map((item: any, idx: number) => (
+                    <div key={idx} className="group relative flex flex-col gap-1 text-xs mt-1">
+                      {/* Timeline Bullet */}
+                      <span className="absolute -left-[16.5px] top-1.5 w-2 h-2 rounded-full bg-violet-500 border border-white/30 group-hover:scale-125 transition-transform" />
+                      
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const event = new CustomEvent('focusGraphNode', { detail: { nodeIdOrPath: item.file } });
+                            window.dispatchEvent(event);
+                          }}
+                          className="text-sky-300 hover:text-sky-200 hover:underline font-mono text-left cursor-pointer transition-colors bg-transparent border-none p-0 select-none text-[11px]"
+                        >
+                          {item.file.split('/').pop()}
+                        </button>
+                        
+                        {item.role && (
+                          <span className="text-[8px] px-1 py-0.2 rounded bg-white/10 text-white/60 border border-white/5 font-semibold uppercase tracking-wider">
+                            {item.role}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {item.explanation && (
+                        <p className="text-white/50 text-[10px] leading-normal font-sans">
+                          {item.explanation}
+                        </p>
+                      )}
+                      <span className="text-[8px] text-white/20 font-mono block truncate max-w-[280px]">
+                        {item.file}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+    } catch (e) {
+      // Fall through to plain text render
+    }
+
+    return msg.text.split('**').map((part, idx) =>
+      idx % 2 === 1 ? <strong key={idx} className="font-bold text-white">{part}</strong> : part
+    );
+  };
+
   useImperativeHandle(ref, () => ({
     toggleChat: (open: boolean) => setIsOpen(open)
   }));
@@ -159,10 +254,7 @@ export const ChatPanel = forwardRef<{ toggleChat: (open: boolean) => void }, Cha
                         : 'bg-white/5 text-white/90 border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.1)] rounded-tl-none',
                     ].join(' ')}
                   >
-                    {/* Basic Markdown Support for Bold text */}
-                    {msg.text.split('**').map((part, idx) =>
-                      idx % 2 === 1 ? <strong key={idx} className="font-bold text-white">{part}</strong> : part
-                    )}
+                    {renderMessageContent(msg)}
                   </div>
                   <span className="text-[9px] text-white/30 mt-1 px-1">
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -9,6 +9,7 @@ export const PLACEHOLDER: RepoGraphPayload = {
     { id: 'app',  label: 'app/',       type: 'folder' as NodeKind, path: 'app' },
     { id: 'components', label: 'components/', type: 'folder' as NodeKind, path: 'app/components' },
     { id: 'lib',  label: 'lib/',       type: 'folder' as NodeKind, path: 'app' },
+    { id: 'utils_dir', label: 'utils/', type: 'folder' as NodeKind, path: 'app/utils' },
     { id: 'public', label: 'public/', type: 'folder' as NodeKind, path: 'public' },
     { id: 'page', label: 'page.tsx',  type: 'file' as NodeKind, path: 'app/page.tsx', language: 'TypeScript', size: 8200 },
     { id: 'layout', label: 'layout.tsx', type: 'file' as NodeKind, path: 'app/layout.tsx', language: 'TypeScript', size: 720 },
@@ -16,6 +17,8 @@ export const PLACEHOLDER: RepoGraphPayload = {
     { id: 'graph', label: 'GraphCanvas.tsx', type: 'file' as NodeKind, path: 'app/components/GraphCanvas.tsx', language: 'TypeScript', size: 3400 },
     { id: 'search', label: 'SearchBar.tsx', type: 'file' as NodeKind, path: 'app/components/SearchBar.tsx', language: 'TypeScript', size: 1200 },
     { id: 'utils', label: 'utils.ts', type: 'file' as NodeKind, path: 'app/layoutUtils.ts', language: 'TypeScript', size: 900 },
+    { id: 'semanticClusterer', label: 'semanticClusterer.ts', type: 'file' as NodeKind, path: 'app/utils/semanticClusterer.ts', language: 'TypeScript', size: 7740, description: 'Performs TF-IDF document vectorization and K-Means file clustering' },
+    { id: 'graphBuilder', label: 'graphBuilder.ts', type: 'file' as NodeKind, path: 'app/utils/graphBuilder.ts', language: 'TypeScript', size: 5640, description: 'Preprocesses repository payload and assigns coordinate layouts' },
     { id: 'logo', label: 'logo.svg', type: 'file' as NodeKind, path: 'public/logo.svg', size: 220 },
     { id: 'favicon', label: 'favicon.ico', type: 'file' as NodeKind, path: 'public/favicon.ico', size: 25900 },
     { id: 'pkg', label: 'package.json', type: 'dependency' as NodeKind, path: 'package.json', size: 535 },
@@ -38,6 +41,9 @@ export const PLACEHOLDER: RepoGraphPayload = {
     { id: 'e13', source: 'lib', target: 'utils' },
     { id: 'e14', source: 'public', target: 'logo' },
     { id: 'e15', source: 'public', target: 'favicon' },
+    { id: 'e16', source: 'app', target: 'utils_dir' },
+    { id: 'e17', source: 'utils_dir', target: 'semanticClusterer' },
+    { id: 'e18', source: 'utils_dir', target: 'graphBuilder' },
   ],
 };
 

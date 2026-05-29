@@ -1,7 +1,7 @@
 // GraphCanvas.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   type Node,
   type Edge,
@@ -33,11 +33,27 @@ interface GraphCanvasProps {
   onSelectedNodeChange: (node: Node | null) => void;
   onNodeClick?: (event: React.MouseEvent, node: Node) => void;
   onNodeDoubleClick?: (event: React.MouseEvent, node: Node) => void;
+  layoutMode?: 'filesystem' | 'semantic';
 }
 
 // ── Change this value to adjust when the auto-collapsing kicks in ────────
 const AUTO_COLLAPSE_THRESHOLD = 56;
 // ─────────────────────────────────────────────────────────────────────────
+
+const getClusterColor = (clusterId?: number | string) => {
+  if (clusterId === undefined || clusterId === 'orphan') return undefined;
+  const colors = [
+    'rgba(14, 165, 233, 0.7)',  // sky-blue
+    'rgba(168, 85, 247, 0.7)',  // purple
+    'rgba(236, 72, 153, 0.7)',  // pink
+    'rgba(34, 197, 94, 0.7)',   // green
+    'rgba(234, 179, 8, 0.7)',   // yellow
+    'rgba(249, 115, 22, 0.7)',  // orange
+  ];
+  const cId = typeof clusterId === 'string' ? parseInt(clusterId, 10) : clusterId;
+  if (isNaN(cId)) return undefined;
+  return colors[cId % colors.length];
+};
 
 export function GraphCanvas({
   nodes: initNodes,
@@ -45,7 +61,8 @@ export function GraphCanvas({
   nodeTypes,
   onSelectedNodeChange,
   onNodeClick,
-  onNodeDoubleClick
+  onNodeDoubleClick,
+  layoutMode = 'filesystem'
 }: GraphCanvasProps) {
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
@@ -78,6 +95,115 @@ export function GraphCanvas({
       }).map(n => n.id)));
     }
   }, [initNodes]);
+
+  const [hintMessage, setHintMessage] = useState<string | null>(null);
+  const hintTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // listen to re-clustering hint event
+  useEffect(() => {
+    const handleHint = (e: Event) => {
+      const customEvent = e as CustomEvent<{ nodeId: string }>;
+      const nodeId = customEvent.detail?.nodeId;
+      const targetNode = nodes.find(n => n.id === nodeId);
+      const label = targetNode?.data?.label || nodeId;
+
+      if (hintTimerRef.current) {
+        clearTimeout(hintTimerRef.current);
+      }
+
+      setHintMessage(`"${label}" set to orphan. Drag near an island cluster to snap it back!`);
+      
+      hintTimerRef.current = setTimeout(() => {
+        setHintMessage(null);
+        hintTimerRef.current = null;
+      }, 5000);
+    };
+    window.addEventListener('show-reclustering-hint', handleHint);
+    return () => {
+      window.removeEventListener('show-reclustering-hint', handleHint);
+      if (hintTimerRef.current) {
+        clearTimeout(hintTimerRef.current);
+      }
+    };
+  }, [nodes]);
+
+  const handleNodeSnap = useCallback((
+    node: Node,
+    clusters: { [clusterId: number]: { x: number; y: number } }
+  ): { x: number; y: number } | null => {
+    const pos = node.position;
+    if (!pos) return null;
+
+    let minDistance = Infinity;
+    let closestClusterId: number | null = null;
+
+    Object.entries(clusters).forEach(([idStr, center]) => {
+      const cId = parseInt(idStr, 10);
+      const dx = pos.x - center.x;
+      const dy = pos.y - center.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestClusterId = cId;
+      }
+    });
+
+    if (closestClusterId !== null && minDistance < 200) {
+      node.data = {
+        ...node.data,
+        clusterId: closestClusterId,
+      };
+      return clusters[closestClusterId];
+    } else {
+      node.data = {
+        ...node.data,
+        clusterId: 'orphan',
+      };
+      window.dispatchEvent(new CustomEvent('show-reclustering-hint', {
+        detail: { nodeId: node.id }
+      }));
+      return null;
+    }
+  }, []);
+
+  const onNodeDragStop = useCallback((event: React.MouseEvent, draggedNode: Node) => {
+    if (layoutMode !== 'semantic') return;
+
+    // Filter file nodes that belong to active clusters
+    const uniqueClusterIds = Array.from(new Set(
+      nodes
+        .map(n => (n.data as any)?.clusterId)
+        .filter(id => id !== undefined && id !== null && id !== 'orphan')
+    )) as number[];
+    const K = uniqueClusterIds.length || 2;
+
+    const centerX = 500;
+    const centerY = 500;
+    const clusters: { [clusterId: number]: { x: number; y: number } } = {};
+    uniqueClusterIds.forEach(cId => {
+      const angle = (cId / K) * 2 * Math.PI;
+      clusters[cId] = {
+        x: centerX + 380 * Math.cos(angle),
+        y: centerY + 380 * Math.sin(angle)
+      };
+    });
+
+    const snappedPos = handleNodeSnap(draggedNode, clusters);
+
+    setNodes(nds => nds.map(n => {
+      if (n.id === draggedNode.id) {
+        return {
+          ...n,
+          position: snappedPos || draggedNode.position,
+          data: {
+            ...n.data,
+            clusterId: draggedNode.data.clusterId,
+          }
+        };
+      }
+      return n;
+    }));
+  }, [layoutMode, nodes, setNodes, handleNodeSnap]);
 
   // Handle single-clicking a node
   const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
@@ -231,7 +357,9 @@ export function GraphCanvas({
     });
 
     // Apply Dagre layout to dynamically reposition nodes
-    const layoutedNodes = applyDagreLayout(visibleNodesRaw, visibleEdgesRaw);
+    const layoutedNodes = layoutMode === 'semantic'
+      ? visibleNodesRaw
+      : applyDagreLayout(visibleNodesRaw, visibleEdgesRaw);
 
     // Helper to evaluate if a node matches the active filter
     const matchesFilter = (n: Node, filter: any): boolean => {
@@ -283,6 +411,8 @@ export function GraphCanvas({
        let isHighlighted = false;
        let isDimmed = false;
 
+       const hasHighlightPath = initNodes.some(node => (node as any).highlight || node.data?.highlight || node.data?.isHighlighted);
+
        if (isTourActive && tourSteps.length > 0) {
          const currentTarget = tourSteps[currentStepIndex]?.targetNodeId;
          isHighlighted = n.id === currentTarget;
@@ -295,7 +425,13 @@ export function GraphCanvas({
          // Fallback to Analytics Filter
          isHighlighted = matchesFilter(n, activeFilter);
          isDimmed = !isHighlighted;
+       } else if ((n as any).highlight || n.data?.highlight || n.data?.isHighlighted) {
+         isHighlighted = true;
+       } else if (hasHighlightPath) {
+         isDimmed = true;
        }
+
+        const clusterColor = layoutMode === 'semantic' ? getClusterColor((n.data as any)?.clusterId) : undefined;
 
        return {
          ...n,
@@ -309,6 +445,7 @@ export function GraphCanvas({
          },
          style: {
            ...n.style,
+           ...(clusterColor ? { borderColor: clusterColor } : {}),
             ...((n.data as any)?.isHeatmapMode ? ((type === 'file' || type === 'dependency') ? { backgroundColor: getHeatmapColor((n.data as any)?.sizeFactor ?? 0), borderColor: getHeatmapColor((n.data as any)?.sizeFactor ?? 0) } : { backgroundColor: 'rgba(255, 255, 255, 0.02)', borderColor: 'rgba(255, 255, 255, 0.05)' }) : {}),
            transition: 'all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)', // Spring-like layout animation
            opacity: 1,
@@ -330,7 +467,7 @@ export function GraphCanvas({
     }));
 
     return { timelineNodes: [...finalNodes, ...annotationNodes], timelineEdges: visibleEdgesRaw };
-  }, [initNodes, initEdges, nodeStates, expandedFolderIds, activeFilter, activeItemId, isTourActive, tourSteps, currentStepIndex, annotations, updateAnnotation, removeAnnotation]);
+  }, [initNodes, initEdges, nodeStates, expandedFolderIds, activeFilter, activeItemId, isTourActive, tourSteps, currentStepIndex, annotations, updateAnnotation, removeAnnotation, layoutMode]);
 
   useEffect(() => {
     setNodes(timelineNodes);
@@ -351,6 +488,52 @@ export function GraphCanvas({
     },
     [onSelectedNodeChange],
   );
+
+  useEffect(() => {
+    const handleFocusNode = (e: Event) => {
+      const customEvent = e as CustomEvent<{ nodeIdOrPath: string }>;
+      const targetIdOrPath = customEvent.detail?.nodeIdOrPath;
+      if (!targetIdOrPath) return;
+
+      // Find the node in initNodes (all nodes)
+      const targetNode = initNodes.find(n => n.id === targetIdOrPath || n.data?.path === targetIdOrPath);
+      if (!targetNode) return;
+
+      const path = (targetNode.data?.path as string) || '';
+      if (path && path.includes('/')) {
+        const parts = path.split('/');
+        const parentPaths: string[] = [];
+        for (let i = 1; i < parts.length; i++) {
+          parentPaths.push(parts.slice(0, i).join('/'));
+        }
+
+        const parentNodeIds = initNodes
+          .filter(n => parentPaths.includes((n.data?.path as string) || ''))
+          .map(n => n.id);
+
+        if (parentNodeIds.length > 0) {
+          setExpandedFolderIds(prev => {
+            const next = new Set(prev);
+            parentNodeIds.forEach(id => next.add(id));
+            return next;
+          });
+        }
+      }
+
+      // Select the node
+      onSelectedNodeChange(targetNode);
+
+      // Focus/fitView after layout updates
+      setTimeout(() => {
+        fitView({ nodes: [targetNode], duration: 800, padding: 0.5, maxZoom: 1.5 });
+      }, 100);
+    };
+
+    window.addEventListener('focusGraphNode', handleFocusNode);
+    return () => {
+      window.removeEventListener('focusGraphNode', handleFocusNode);
+    };
+  }, [initNodes, fitView, onSelectedNodeChange, setExpandedFolderIds]);
 
   // Tour Cinematic Camera Sync
   useEffect(() => {
@@ -397,6 +580,7 @@ export function GraphCanvas({
         onSelectionChange={onSelectionChange}
         onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
+        onNodeDragStop={onNodeDragStop}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
         onInit={() => fitView({ padding: 0.18, duration: 500 })}
@@ -457,6 +641,34 @@ export function GraphCanvas({
           }
         }}
       />
+
+      {hintMessage && (
+        <div 
+          style={{
+            position: 'absolute',
+            bottom: '96px',
+            right: '16px',
+            zIndex: 9999,
+            padding: '16px',
+            backgroundColor: 'rgba(234, 179, 8, 0.15)',
+            border: '1px solid rgba(234, 179, 8, 0.3)',
+            backdropFilter: 'blur(20px)',
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            maxWidth: '320px',
+            pointerEvents: 'none'
+          }}
+          className="animate-pulse"
+        >
+          <span style={{ fontSize: '1.25rem' }}>⚠️</span>
+          <p style={{ margin: 0, color: '#fef08a', fontSize: '0.75rem', fontWeight: 500, lineHeight: 1.4 }}>
+            {hintMessage}
+          </p>
+        </div>
+      )}
     </>
   );
 }

@@ -62,6 +62,21 @@ function RepoGraphInner() {
   });
   const abortRef = useRef<AbortController | null>(null);
   const [previewNode, setPreviewNode] = useState<Node | null>(null);
+  const [highlightedPaths, setHighlightedPaths] = useState<string[]>([]);
+  const [layoutMode, setLayoutMode] = useState<'filesystem' | 'semantic'>('filesystem');
+
+  useEffect(() => {
+    const handleHighlight = (e: Event) => {
+      const customEvent = e as CustomEvent<{ paths: string[] }>;
+      if (customEvent.detail && Array.isArray(customEvent.detail.paths)) {
+        setHighlightedPaths(customEvent.detail.paths);
+      }
+    };
+    window.addEventListener('highlightPath', handleHighlight);
+    return () => {
+      window.removeEventListener('highlightPath', handleHighlight);
+    };
+  }, []);
 
   const displayLabel = meta?.repo ?? PLACEHOLDER.nodes[0]?.label ?? 'Repository';
   useExportShortcuts(displayLabel);
@@ -237,24 +252,46 @@ function RepoGraphInner() {
         }
       }
 
+      const pathStr = d?.path || node.id;
+      const isPathHighlighted = highlightedPaths.some(p => {
+        const normP = p.replace(/\\/g, '/').toLowerCase();
+        const normPath = pathStr.replace(/\\/g, '/').toLowerCase();
+        return normPath === normP || normPath.endsWith(normP) || normP.endsWith(normPath);
+      });
+
+      const semanticPos = d?.semanticPosition;
+
       return {
         ...node,
+        position: layoutMode === 'semantic' && semanticPos ? semanticPos : node.position,
         hidden: !visibleNodeIds.has(node.id),
+        highlight: isPathHighlighted,
         data: {
           ...d,
-          ...heatmapProps
+          ...heatmapProps,
+          isHighlighted: d.isHighlighted || isPathHighlighted
         }
       };
     });
 
     // 4. Edges are hidden if either source OR target is hidden
-    const edges = flowData.edges.map(edge => ({
-      ...edge,
-      hidden: !visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target)
-    }));
+    const edges = flowData.edges.map(edge => {
+      const sourceNode = nodes.find(n => n.id === edge.source);
+      const targetNode = nodes.find(n => n.id === edge.target);
+      const isEdgeHighlighted = !!((sourceNode as any)?.highlight && (targetNode as any)?.highlight);
+
+      return {
+        ...edge,
+        hidden: !visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target),
+        animated: edge.animated || isEdgeHighlighted,
+        style: isEdgeHighlighted
+          ? { stroke: 'rgba(14, 165, 233, 0.8)', strokeWidth: 3 }
+          : edge.style
+      };
+    });
 
     return { nodes, edges };
-  }, [flowData, filters, isHeatmapMode]);
+  }, [flowData, filters, isHeatmapMode, highlightedPaths, layoutMode]);
 
   // Use these in your GraphCanvas
   const { nodes: displayNodes, edges: displayEdges } = processedGraph;
@@ -319,13 +356,23 @@ function RepoGraphInner() {
         />
 
         {/* --- SIDE LAYER: Floating Action Buttons --- */}
-        {fetchStatus === 'success' && (
+        {(fetchStatus === 'success' || fetchStatus === 'idle') && (
           <aside className="absolute top-20 right-4 z-30 flex flex-col gap-2">
             <ExportMenu projectName={displayLabel} repoUrl={currentRepoUrl} />
             <ShareButton repoUrl={currentRepoUrl} filters={filters} />
             <button onClick={() => setShowTimeline(!showTimeline)} className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition">🎬 Timeline</button>
             {meta?.analytics && <button onClick={() => setIsAnalyticsPanelOpen(!isAnalyticsPanelOpen)} className="p-2 bg-white/10 rounded-lg">📊 Analytics</button>}
             <button onClick={() => setIsHeatmapMode(!isHeatmapMode)} className={`p-2 rounded-lg transition ${isHeatmapMode ? 'bg-red-500/20 text-red-200 border border-red-500/30' : 'bg-white/10 hover:bg-white/20 text-white'}`}>🔥 Heatmap</button>
+            <button
+              onClick={() => setLayoutMode(layoutMode === 'filesystem' ? 'semantic' : 'filesystem')}
+              className={`p-2 rounded-lg transition font-medium border shadow-md flex items-center justify-center gap-1.5 ${
+                layoutMode === 'semantic'
+                  ? 'bg-sky-600/80 text-white border-sky-500/20 hover:bg-sky-500/90'
+                  : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
+              }`}
+            >
+              🧠 {layoutMode === 'filesystem' ? 'Semantic Layout' : 'Folder Layout'}
+            </button>
             <button onClick={() => setViewMode(viewMode === '2D' ? '3D' : '2D')} className="p-2 bg-violet-600/80 text-white rounded-lg hover:bg-violet-600 transition font-medium border border-violet-500/20 shadow-md">{viewMode === '2D' ? '3D View' : '2D View'}</button>
           </aside>
         )}
@@ -347,6 +394,7 @@ function RepoGraphInner() {
               onSelectedNodeChange={setSelectedNode}
               onNodeClick={handleNodeClick}
               onNodeDoubleClick={handleNodeDoubleClick}
+              layoutMode={layoutMode}
             />
           )}
           {/* Spotlight Search Overlay */}
@@ -378,6 +426,37 @@ function RepoGraphInner() {
           )}
         </AnimatePresence>
         <AnimatePresence>{isHeatmapMode && <HeatmapLegend />}</AnimatePresence>
+        <AnimatePresence>
+          {layoutMode === 'semantic' && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 15 }}
+              className="absolute bottom-20 left-4 z-40 p-4 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl max-w-xs flex flex-col gap-2 pointer-events-auto"
+            >
+              <h3 className="text-[10px] font-bold uppercase tracking-wider text-sky-400">Semantic Clusters</h3>
+              <div className="flex flex-col gap-2 mt-1 max-h-[220px] overflow-y-auto pr-1">
+                {Array.from(new Set(processedGraph.nodes.map(n => (n.data as GlassNodeData)?.clusterLabel).filter(Boolean))).map((label, idx) => {
+                  const colors = [
+                    '#0ea5e9', // sky-blue
+                    '#a855f7', // purple
+                    '#ec4899', // pink
+                    '#22c55e', // green
+                    '#eab308', // yellow
+                    '#f97316', // orange
+                  ];
+                  const color = colors[idx % colors.length];
+                  return (
+                    <div key={idx} className="flex items-center gap-2 text-xs text-white/80">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }} />
+                      <span className="font-mono text-[10px] truncate max-w-[200px]" title={label as string}>{label as string}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {previewNode && (() => {

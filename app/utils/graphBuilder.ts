@@ -3,6 +3,7 @@ import type { Node, Edge } from '@xyflow/react';
 import dagre from 'dagre';
 import type { GlassNodeData } from '../types';
 import type { RepoNode, RepoEdge, RepoGraphPayload, ApiResponse } from '../types';
+import { computeSemanticLayout } from './semanticClusterer';
 
 const NODE_W = 180;
 const NODE_H = 72;
@@ -67,7 +68,77 @@ export function buildFromPlaceholder(pl: RepoGraphPayload): { nodes: Node[]; edg
       } satisfies GlassNodeData,
     };
   });
+  assignSemanticPositions(rfNodes);
   return { nodes: applyDagreLayout(rfNodes, rfEdges), edges: rfEdges };
+}
+
+export function assignSemanticPositions(nodes: Node[]) {
+  const semanticLayout = computeSemanticLayout(nodes);
+  
+  // Update files/dependencies first
+  nodes.forEach(n => {
+    const layout = semanticLayout[n.id];
+    if (layout) {
+      n.data = {
+        ...n.data,
+        clusterId: layout.clusterId,
+        clusterLabel: layout.clusterLabel,
+        semanticPosition: { x: layout.x, y: layout.y }
+      };
+    }
+  });
+
+  // Helper to find descendent files of a folder node
+  const getDescendentFiles = (folderId: string): Node[] => {
+    const folderNode = nodes.find(n => n.id === folderId);
+    const folderPath = (folderNode?.data as GlassNodeData)?.path || '';
+    if (!folderPath) return [];
+
+    return nodes.filter(n => {
+      const type = (n.data as GlassNodeData)?.nodeType || n.type;
+      const isFile = type === 'file' || type === 'dependency';
+      const path = (n.data as GlassNodeData)?.path || '';
+      return isFile && path.startsWith(folderPath) && path !== folderPath;
+    });
+  };
+
+  // Update folder and root nodes with average descendent coordinates
+  nodes.forEach(n => {
+    const type = (n.data as GlassNodeData)?.nodeType || n.type;
+    if (type === 'folder' || type === 'root' || type === 'dir') {
+      const descFiles = getDescendentFiles(n.id);
+      if (descFiles.length > 0) {
+        let sumX = 0;
+        let sumY = 0;
+        let validCount = 0;
+        descFiles.forEach(file => {
+          const semPos = (file.data as GlassNodeData)?.semanticPosition;
+          if (semPos) {
+            sumX += semPos.x;
+            sumY += semPos.y;
+            validCount++;
+          }
+        });
+
+        if (validCount > 0) {
+          n.data = {
+            ...n.data,
+            semanticPosition: { x: sumX / validCount, y: sumY / validCount }
+          };
+        } else {
+          n.data = {
+            ...n.data,
+            semanticPosition: { x: 500, y: 500 }
+          };
+        }
+      } else {
+        n.data = {
+          ...n.data,
+          semanticPosition: { x: 500, y: 500 }
+        };
+      }
+    }
+  });
 }
 
 /** Convert API response → dagre-positioned React Flow data */
@@ -101,5 +172,6 @@ export function buildFromApi(api: ApiResponse): { nodes: Node[]; edges: Edge[] }
       } satisfies GlassNodeData,
     };
   });
+  assignSemanticPositions(rfNodes);
   return { nodes: applyDagreLayout(rfNodes, rfEdges), edges: rfEdges };
 }
