@@ -320,10 +320,20 @@ function RepoGraphInner() {
 
   return (
     <>
-      <main className="relative flex flex-col w-screen h-screen overflow-hidden bg-[#121212] font-sans">
-
-        {/* Background Pattern */}
-        <div className="absolute inset-0 z-0 opacity-30 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+      <main className="relative flex flex-col w-screen h-screen overflow-hidden bg-[#0A0A0A] font-sans">
+        {/* The Grid Layer */}
+        {/* The Grid Layer - Improved Contrast & Visibility */}
+        <div
+          className="absolute inset-0 z-0 pointer-events-none"
+          style={{
+            backgroundImage: `linear-gradient(to right, rgba(255, 255, 255, 0.07) 1px, transparent 1px), 
+                      linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 1px, transparent 1px)`,
+            backgroundSize: '40px 40px',
+            // We removed opacity-20 from the class and moved the transparency to the RGBA values
+            // This makes the lines sharper and crisper.
+            maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black, transparent)'
+          }}
+        />
 
         {/* --- TOP LAYER: Search & Filters --- */}
         <header className="absolute top-0 left-0 w-full z-30 p-4 flex justify-center pointer-events-none">
@@ -473,6 +483,8 @@ function RepoGraphInner() {
             );
           })()}
         </AnimatePresence>
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-900/10 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-900/10 blur-[120px] pointer-events-none" />
       </main>
     </>
   );

@@ -92,8 +92,13 @@ export function ExportMenu({ projectName = 'RepoGraph', repoUrl }: { projectName
         // Update step index to trigger zoom and automated html2canvas capture in TourPanel
         setCurrentStepIndex(i);
 
-        // Wait 1200ms for transitions (300ms delay) + capture execution to complete
-        await new Promise(resolve => setTimeout(resolve, 1200));
+        // Poll snapshotsRef.current[i] until it is populated (up to 2500ms max safety timeout)
+        const startTime = Date.now();
+        while (!snapshotsRef.current?.[i] && Date.now() - startTime < 2500) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        // Minor buffer to ensure UI and state updates fully settle
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       // 3. Trigger PPTX compilation by constructing slides from the stored snapshots object in order

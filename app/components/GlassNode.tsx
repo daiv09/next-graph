@@ -3,7 +3,45 @@
 import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { motion } from 'framer-motion';
-import type { GlassNodeData, AnimState } from '../types';
+import {
+  FolderFill, FileCodeFill, FiletypeJson, FileEarmarkTextFill,
+  BoxSeam, PaletteFill, Globe, LayersFill, FileEarmarkCodeFill
+} from 'react-bootstrap-icons';
+import type { GlassNodeData, AnimState, NodeKind } from '../types';
+
+// Wrapper for a consistent, premium icon badge
+const GlassIcon = ({ children, colorClass }: { children: React.ReactNode, colorClass: string }) => (
+  <div className={`flex items-center justify-center w-6 h-6 rounded-lg ${colorClass}`}>
+    {children}
+  </div>
+);
+
+const getIcon = (kind: NodeKind, lang?: string) => {
+  const iconClass = "w-4 h-4";
+
+  if (kind === 'root') return { icon: <LayersFill className={iconClass} />, color: "border-violet-500/30 text-violet-300" };
+  if (kind === 'folder' || kind === 'dir') return { icon: <FolderFill className={iconClass} />, color: "border-sky-500/30 text-sky-300" };
+  if (kind === 'dependency') return { icon: <BoxSeam className={iconClass} />, color: "border-amber-500/30 text-amber-300" };
+
+  const mapping: Record<string, string> = {
+    TypeScript: "border-blue-500/30 text-blue-300",
+    JavaScript: "border-yellow-500/30 text-yellow-300",
+    CSS: "border-pink-500/30 text-pink-300",
+    JSON: "border-emerald-500/30 text-emerald-300",
+    HTML: "border-orange-500/30 text-orange-300",
+  };
+
+  const color = lang ? (mapping[lang] ?? "border-white/20 text-white/50") : "border-white/20 text-white/50";
+
+  let icon = <FileEarmarkTextFill className={iconClass} />;
+  if (lang === 'TypeScript' || lang === 'JavaScript') icon = <FileCodeFill className={iconClass} />;
+  else if (lang === 'JSON') icon = <FiletypeJson className={iconClass} />;
+  else if (lang === 'CSS') icon = <PaletteFill className={iconClass} />;
+  else if (lang === 'HTML') icon = <Globe className={iconClass} />;
+  else if (lang) icon = <FileEarmarkCodeFill className={iconClass} />;
+
+  return { icon, color };
+};
 
 // ── Visual config per animation state ──────────────────────────────────────
 const STATE_STYLES: Record<
@@ -66,16 +104,7 @@ export const GlassNode = memo(({ data, style }: { data: GlassNodeData; style?: R
   const animState: AnimState = data.animState ?? 'visible';
   const stateStyle = STATE_STYLES[animState];
 
-  // ── File type icon ──────────────────────────────────────────────────────
-  const Icon = isDirectory
-    ? (data.nodeType === 'root' ? '🌐' : name.startsWith('node_modules') ? '📦' : '📁')
-    : name.endsWith('.ts') || name.endsWith('.tsx') ? '📘'
-    : name.endsWith('.js') || name.endsWith('.jsx') ? '📙'
-    : name.endsWith('.css') || name.endsWith('.scss') ? '📕'
-    : name.endsWith('.json') ? '🔧'
-    : name.endsWith('.md') ? '📝'
-    : name.endsWith('.py') ? '🐍'
-    : '📄';
+  const { icon, color } = getIcon(data.nodeType, data.language);
 
   return (
     <motion.div
@@ -172,7 +201,7 @@ export const GlassNode = memo(({ data, style }: { data: GlassNodeData; style?: R
       <Handle type="target" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
 
       {/* Icon */}
-      <span style={{ fontSize: 16, flexShrink: 0 }}>{Icon}</span>
+      <GlassIcon colorClass={color}>{icon}</GlassIcon>
 
       {/* Text */}
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>

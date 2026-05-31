@@ -6,12 +6,12 @@ export const GITHUB_API_BASE = "https://api.github.com";
 export const PLACEHOLDER: RepoGraphPayload = {
   nodes: [
     { id: 'root', label: 'next-graph', type: 'root' as NodeKind, description: 'GitHub Repository Root' },
-    { id: 'app',  label: 'app/',       type: 'folder' as NodeKind, path: 'app' },
+    { id: 'app', label: 'app/', type: 'folder' as NodeKind, path: 'app' },
     { id: 'components', label: 'components/', type: 'folder' as NodeKind, path: 'app/components' },
-    { id: 'lib',  label: 'lib/',       type: 'folder' as NodeKind, path: 'app' },
+    { id: 'lib', label: 'lib/', type: 'folder' as NodeKind, path: 'app' },
     { id: 'utils_dir', label: 'utils/', type: 'folder' as NodeKind, path: 'app/utils' },
     { id: 'public', label: 'public/', type: 'folder' as NodeKind, path: 'public' },
-    { id: 'page', label: 'page.tsx',  type: 'file' as NodeKind, path: 'app/page.tsx', language: 'TypeScript', size: 8200 },
+    { id: 'page', label: 'page.tsx', type: 'file' as NodeKind, path: 'app/page.tsx', language: 'TypeScript', size: 8200 },
     { id: 'layout', label: 'layout.tsx', type: 'file' as NodeKind, path: 'app/layout.tsx', language: 'TypeScript', size: 720 },
     { id: 'globals', label: 'globals.css', type: 'file' as NodeKind, path: 'app/globals.css', language: 'CSS', size: 490 },
     { id: 'graph', label: 'GraphCanvas.tsx', type: 'file' as NodeKind, path: 'app/components/GraphCanvas.tsx', language: 'TypeScript', size: 3400 },

@@ -23,11 +23,17 @@ export function TourPanel() {
       const step = tourSteps[stepIndex];
       if (!step) return;
 
-      // 1. Wait for 300ms transition delay to allow movements/zoom to settle
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // 1. Wait for 1300ms transition delay to allow camera fitView (1200ms) to settle
+      await new Promise(resolve => setTimeout(resolve, 1300));
 
       const viewportEl = document.querySelector<HTMLElement>('.react-flow__viewport');
       if (viewportEl) {
+        // Apply brightness/contrast CSS filter before capture
+        const originalFilter = viewportEl.style.filter;
+        const originalWebkitFilter = viewportEl.style.webkitFilter;
+        viewportEl.style.filter = 'brightness(1.2) contrast(1.2)';
+        viewportEl.style.webkitFilter = 'brightness(1.2) contrast(1.2)';
+
         try {
           // Dynamic import of html2canvas for SSR/Next.js compatibility
           const html2canvas = (await import('html2canvas')).default;
@@ -51,6 +57,7 @@ export function TourPanel() {
               logging: false,
               useCORS: true,
               allowTaint: true,
+              scale: 2, // High resolution scale
             });
             const base64Image = canvas.toDataURL('image/png');
             
@@ -61,6 +68,10 @@ export function TourPanel() {
           }
         } catch (err) {
           console.error('Failed to capture graph snapshot using html2canvas:', err);
+        } finally {
+          // Restore original filter styling immediately after rendering
+          viewportEl.style.filter = originalFilter;
+          viewportEl.style.webkitFilter = originalWebkitFilter;
         }
       }
     };

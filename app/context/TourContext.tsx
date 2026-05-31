@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
 import type { TourStep } from '../types';
 
 export interface SlideData {
@@ -51,7 +51,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
     }
   }, [currentStepIndex, isActive, onStepChange, tourSteps]);
 
-  const startTour = (steps: TourStep[]) => {
+  const startTour = useCallback((steps: TourStep[]) => {
     if (!steps || steps.length === 0) return;
     setSlides({});
     setSnapshots({});
@@ -59,27 +59,27 @@ export function TourProvider({ children }: { children: ReactNode }) {
     setTourSteps(steps);
     setCurrentStepIndex(0);
     setIsActive(true);
-  };
+  }, []);
 
-  const nextStep = () => {
+  const nextStep = useCallback(() => {
     if (onStepComplete) {
       onStepComplete(currentStepIndex);
     }
     if (currentStepIndex < tourSteps.length - 1) {
       setCurrentStepIndex(prev => prev + 1);
     }
-  };
+  }, [onStepComplete, currentStepIndex, tourSteps.length]);
 
-  const prevStep = () => {
+  const prevStep = useCallback(() => {
     if (onStepComplete) {
       onStepComplete(currentStepIndex);
     }
     if (currentStepIndex > 0) {
       setCurrentStepIndex(prev => prev - 1);
     }
-  };
+  }, [onStepComplete, currentStepIndex]);
 
-  const exitTour = () => {
+  const exitTour = useCallback(() => {
     if (onStepComplete) {
       onStepComplete(currentStepIndex);
     }
@@ -91,64 +91,88 @@ export function TourProvider({ children }: { children: ReactNode }) {
       setSnapshots({});
       snapshotsRef.current = {};
     }, 300); // Wait for exit animation
-  };
+  }, [onStepComplete]);
 
-  const setSlide = (index: number, data: SlideData) => {
+  const setSlide = useCallback((index: number, data: SlideData) => {
     setSlides(prev => ({
       ...prev,
       [index]: data
     }));
-  };
+  }, []);
 
-  const clearSlides = () => {
+  const clearSlides = useCallback(() => {
     setSlides({});
-  };
+  }, []);
 
-  const setSnapshot = (index: number, base64: string) => {
+  const setSnapshot = useCallback((index: number, base64: string) => {
     snapshotsRef.current[index] = base64;
     setSnapshots(prev => ({
       ...prev,
       [index]: base64
     }));
-  };
+  }, []);
 
-  const clearSnapshots = () => {
+  const clearSnapshots = useCallback(() => {
     snapshotsRef.current = {};
     setSnapshots({});
-  };
+  }, []);
 
-  const setOnStepComplete = (cb: ((index: number) => void) | undefined) => {
+  const setOnStepComplete = useCallback((cb: ((index: number) => void) | undefined) => {
     setOnStepCompleteState(() => cb);
-  };
+  }, []);
 
-  const setOnStepChange = (cb: ((index: number) => void) | undefined) => {
+  const setOnStepChange = useCallback((cb: ((index: number) => void) | undefined) => {
     setOnStepChangeState(() => cb);
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    isActive,
+    tourSteps,
+    currentStepIndex,
+    startTour,
+    nextStep,
+    prevStep,
+    exitTour,
+    slides,
+    setSlide,
+    clearSlides,
+    snapshots,
+    snapshotsRef,
+    setSnapshot,
+    clearSnapshots,
+    onStepComplete,
+    setOnStepComplete,
+    onStepChange,
+    setOnStepChange,
+    setCurrentStepIndex,
+    setIsActive,
+    setTourSteps
+  }), [
+    isActive,
+    tourSteps,
+    currentStepIndex,
+    startTour,
+    nextStep,
+    prevStep,
+    exitTour,
+    slides,
+    setSlide,
+    clearSlides,
+    snapshots,
+    snapshotsRef,
+    setSnapshot,
+    clearSnapshots,
+    onStepComplete,
+    setOnStepComplete,
+    onStepChange,
+    setOnStepChange,
+    setCurrentStepIndex,
+    setIsActive,
+    setTourSteps
+  ]);
 
   return (
-    <TourContext.Provider value={{
-      isActive,
-      tourSteps,
-      currentStepIndex,
-      startTour,
-      nextStep,
-      prevStep,
-      exitTour,
-      slides,
-      setSlide,
-      clearSlides,
-      snapshots,
-      snapshotsRef,
-      setSnapshot,
-      clearSnapshots,
-      onStepComplete,
-      setOnStepComplete,
-      onStepChange,
-      setOnStepChange,
-      setCurrentStepIndex,
-      setIsActive,
-      setTourSteps
-    }}>
+    <TourContext.Provider value={contextValue}>
       {children}
     </TourContext.Provider>
   );

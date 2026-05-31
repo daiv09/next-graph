@@ -389,7 +389,6 @@ export const generatePresentation = async (
         w: 5.5,
         h: 3.8,
         line: { color: '334155', width: 1.5 },
-        fill: { color: 'none' }
       });
     } else {
       slide.addText('No graph screenshot captured.', {
